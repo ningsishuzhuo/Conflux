@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.orca/agent-hooks/gemini-hook.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "^(write_file|replace|edit_file|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null; printf '%s\\n' '{\"decision\":\"deny\",\"reason\":\"read-only\"}'"
+          }
+        ]
+      }
+    ]
+  }
+}

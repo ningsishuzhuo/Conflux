@@ -1,0 +1,7 @@
+docs/research/
+__pycache__/
+*.pyc
+*.lock
+handoffs/
+ledger.jsonl
+*.ledger.jsonl

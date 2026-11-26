@@ -1,0 +1,8 @@
+{
+  "routes": [
+    {"agent": "codex", "profile": "default", "model": "example", "billing": "subscription", "keep_open_default": false},
+    {"agent": "antigravity", "profile": "default", "model": "example", "billing": "subscription", "keep_open_default": false},
+    {"agent": "dsh", "profile": "default", "model": "example", "billing": "low_cost", "keep_open_default": true},
+    {"agent": "claude", "profile": "default", "model": "example", "billing": "paid", "keep_open_default": false}
+  ]
+}
