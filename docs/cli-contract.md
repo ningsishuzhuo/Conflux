@@ -21,7 +21,7 @@ python3 conflux.py dispatch --policy <path> --agent <agent> --profile <profile>
 
 - `--orca-bin` 默认 `orca`。`--cwd` 必须为现有目录，并作为 Orca 子进程的工作目录。
 - 付费路由要求非空白理由。未知路由、非法策略、非法工作目录或透传冲突以状态码 2 拒绝，且不调用 Orca。
-- 执行 `orca orchestration worker-start --agent <agent> --model <model>`，随后连接原生参数，保持其顺序和内容。切片 1 的 `profile` 是本地策略标签，由调用者提供。Orca 的实际配置和工作区选择由 Orca 环境及原生参数决定。
+- 执行 `orca orchestration worker-start --agent <agent> --model <model>`，随后连接原生参数，保持其顺序和内容。匹配到 `model: default` 路由时，省略 Orca 的 `--model` 参数以跟随客户端默认模型。切片 1 的 `profile` 是本地策略标签，由调用者提供。Orca 的实际配置和工作区选择由 Orca 环境及原生参数决定。
 - 原生参数禁止出现 `--agent`、`--model`、`--profile`、`--cwd`，包含 `--flag=val` 形式。匹配路由的 `keep_open_default` 为真且参数未含 `--keep-open` 时，在末尾追加一次。
 - 透传 Orca 的 stdout、stderr 和退出码。启用账本时可传原生 `--json` 以获取 JSON 回执。只有退出码为 0 且顶层 `dispatchId` 或 `result.dispatchId` 为非空白字符串时才追加，账本全历史按 ID 去重。成功派单但缺少可解析的 ID 时向 stderr 告警。
 - Antigravity 派单必须传入 `--ledger`。缺少该参数时退出码为 2，且不会调用 Orca。调用前只读检查 `now - 5h < ts <= now` 内去重派单。Antigravity 仅在 `2 * (agy_calls + 1) < codex_calls` 时放行，否则返回 2。其他代理照常派单，DSH、Claude 等只计审计。调用结束后才获取同目录 `<账本文件名>.lock` 的排他锁。

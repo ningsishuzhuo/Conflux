@@ -44,10 +44,10 @@ class DispatchTests(unittest.TestCase):
         )
         self.stub.chmod(0o700)
 
-    def dispatch(self, agent="codex", *, cwd=None, options=(), native=()):
+    def dispatch(self, agent="codex", *, model="example", cwd=None, options=(), native=()):
         return subprocess.run(
             [sys.executable, str(CLI), "dispatch", "--policy", str(self.policy),
-             "--agent", agent, "--profile", "default", "--model", "example",
+             "--agent", agent, "--profile", "default", "--model", model,
              "--cwd", str(cwd or self.root), "--orca-bin", str(self.stub),
              *options, "--", *native],
             capture_output=True, text=True,
@@ -71,6 +71,16 @@ class DispatchTests(unittest.TestCase):
         result = self.dispatch(native=native)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_called("codex", *native)
+
+    def test_default_model_follows_client(self):
+        self.assert_rejected(self.dispatch(model="default"))
+        self.routes.append(dict(self.routes[0], model="default"))
+        self.write_policy()
+        self.assert_rejected(self.dispatch(model="default", native=("--model=example",)))
+        result = self.dispatch(model="default", native=("--json",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        _, argv = json.loads(self.calls.read_text())
+        self.assertEqual(argv, ["orchestration", "worker-start", "--agent", "codex", "--json"])
 
     def test_low_cost_adds_keep_open_only_when_absent(self):
         for native in [("--json",), ("--keep-open", "--json")]:

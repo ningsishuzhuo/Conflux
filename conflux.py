@@ -202,7 +202,7 @@ def main(argv):
         except DATA_ERRORS as error:
             parser.error(f"cannot read ledger: {error}")
     binary = str(Path(args.orca_bin).absolute()) if "/" in args.orca_bin else args.orca_bin
-    command = [binary, "orchestration", "worker-start", "--agent", args.agent, "--model", args.model, *native]
+    command = [binary, "orchestration", "worker-start", "--agent", args.agent, *([] if args.model == "default" else ["--model", args.model]), *native]
     if route["keep_open_default"] and "--keep-open" not in native:
         command.append("--keep-open")
     try:
