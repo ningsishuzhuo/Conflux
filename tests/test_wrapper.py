@@ -60,7 +60,7 @@ class WrapperTests(unittest.TestCase):
         result = self.run_cli(*self.dispatch)
         self.assertEqual(result.returncode, 2)
         self.assertIn("cannot load policy", result.stderr)
-        self.assertIn(str(self.policy), result.stderr)
+        self.assertIn(repr(str(self.policy)), result.stderr)
 
     def test_explicit_policy_and_ledger_override_environment(self):
         self.env.update(CONFLUX_POLICY=str(self.policy), CONFLUX_LEDGER=str(self.ledger))
