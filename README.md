@@ -1,28 +1,87 @@
 # Conflux
 
-Conflux 是面向 Orca 多客户端协作的薄策略层。它用 Python 3 标准库实现派单准入、五小时用量查询和可核验的六行交接。
+Conflux 是构建在 **Orca 原生编排**之上的极薄多 Agent 策略层，负责跨模型派单、额外付费硬护栏、5 小时滚动窗口配比，以及可核验的六行原子交接。
 
-## 为什么更轻
+核心由 251 行有效 Python 代码组成（不计空行和注释），仅使用 Python 3.8+ 标准库，零第三方依赖。跨项目 Bash 包装器共 38 行。
 
-对比旧私有实现（约 4.3k 行），Conflux 两个生产模块合计最多 270 个非空、非注释行，按门禁上限计算约少 94%。Run、Task、Worker、终态和资源回收由 Orca 原生管理。客户端权限负责协调者写保护，仓库只保留共用规则和按需加载的技能。这个数字衡量代码规模。
-
-## 快速开始
-
-需要 Python ≥ 3.8（海象运算符）和 POSIX 环境（macOS / Linux，使用 `fcntl`），以及可用的 Orca CLI 和当前 Orca 会话。升级验证以 Orca 1.4.273 为对照。用 `orca orchestration worker-start --help` 核对当前版本原生参数。
-
-1. 编辑 [策略表](policy.json)，把示例模型替换为客户端可用模型。每条路由精确匹配 `agent`、`profile`、`model`。Claude 路由保持 `paid`，每次付费派单须显式授权。
-2. 设置 `CODEX_MODEL`、`ORCA_SESSION` 和 `LEDGER`，其中 `LEDGER` 指向现有目录内的账本文件。
-
-```sh
-python3 conflux.py dispatch --policy policy.json --agent codex --profile default \
-  --model "$CODEX_MODEL" --cwd . --ledger "$LEDGER" -- \
-  --from "$ORCA_SESSION" --spec "运行单测并报告结果" --worktree current --json
-python3 conflux.py usage --ledger "$LEDGER"
+```text
+Coordinator --> Conflux (route / paid / ratio) --> Orca (Run / Task / Worker)
+                    |                                  |
+                    +<-------- dispatch receipt -------+
+                    +--------> ledger / usage
+                    +--------> atomic handoff / verify
 ```
 
-`usage` 统计最近五小时取得唯一 Dispatch ID 的成功派单，另可用 `--codex-jsonl` 读取指定会话的 token 用量。Antigravity 派单带同一账本，计入候选后须满足 `2 × AGY_calls < Codex_calls`。实际订阅配额以服务商显示为准。`--now` 是测试用的固定时钟开关，默认使用当前 UTC 时间。
+Run、Task、Worker 的生命周期、终态和资源回收由 Orca 原生管理。
 
-3. 创建 UTF-8 文件 `handoff.md`，用此格式填写真实 ID 和下一步，保留末尾换行。
+## 1. 派单速查
+
+简单任务由当前 Agent 直接回答。需要派单时，按下表选择角色。
+
+| 角色（`agent`） | 何时使用 | 约束 |
+| --- | --- | --- |
+| Codex（`codex`） | 主力厚委派，一次交付完整的规划、实现、调试、测试和证据 | 成功回执计入配比的 Codex 次数 |
+| DSH（`dsh`） | 独立、低风险、可并行，且净收益高于协调成本 | 示例策略自动追加 Orca 的 `--keep-open`。叶节点禁止再派生 |
+| Claude Code（`claude`） | 定点审查或重大裁决 | 默认拒绝付费派单。每次须显式传入 `--authorize-paid <理由>` |
+| Antigravity（`antigravity`） | 极轻协调，负责定契约、重大决策和验收 | 使用同一账本，近 5 小时须满足 `2 × (AGY + 1) < Codex` |
+
+配比以 UTC 滚动窗口内成功派单的唯一 Dispatch ID 计数，式中的 `+ 1` 代表候选派单。DSH 和 Claude Code 只计审计。
+
+## 2. 五分钟安装
+
+准备 **Python ≥ 3.8**、**POSIX 环境（macOS / Linux，含 Bash）** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
+
+**第一步：准备用户级策略与状态目录。** 在 Conflux 仓库根目录执行，已有用户级策略会保留。
+
+```sh
+mkdir -p "$HOME/.config/conflux" "$HOME/.local/state/conflux"
+test -e "$HOME/.config/conflux/policy.json" ||
+  sed 's/"example"/"default"/g' policy.json > "$HOME/.config/conflux/policy.json"
+```
+
+默认命令已把 `example` 替换为 `default`（跟随客户端默认模型）；如需固定模型，编辑 `~/.config/conflux/policy.json` 并保持 Claude 路由的 `billing` 为 `paid`。路由精确匹配 `agent`、`profile`、`model` 三元组。这里的 `profile` 是 Conflux 策略标签。
+
+**第二步：软链命令与全局 Skill。** 仍在 Conflux 仓库根目录执行。
+
+```sh
+mkdir -p "$HOME/.local/bin" "$HOME/.agents/skills"
+ln -sfn "$(pwd -P)/bin/conflux" "$HOME/.local/bin/conflux"
+ln -sfn "$(pwd -P)/.agents/skills/dispatch" "$HOME/.agents/skills/conflux-dispatch"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+如需新终端也能使用，把最后一行加入 Shell 启动配置。随后可在任意项目目录调用 `conflux`。
+
+策略和账本的查找优先级依次是显式参数、`CONFLUX_POLICY` / `CONFLUX_LEDGER`、用户级默认路径。默认策略为 `~/.config/conflux/policy.json`，默认账本为 `~/.local/state/conflux/ledger.jsonl`。为防止外部仓库伪造策略，`bin/conflux` 绝不回退到当前目录的 `./policy.json`。
+
+## 3. 日常命令
+
+### `conflux dispatch` · 派单
+
+将 `ORCA_SESSION` 设为当前协调会话 ID。下例要求用户策略有 `codex / default / default` 路由。
+
+```sh
+conflux dispatch --agent codex --profile default --model default --cwd . -- \
+  --from "$ORCA_SESSION" --spec "运行单测并报告失败项" \
+  --worktree current --environment local --json
+```
+
+- 策略中的 `"model": "default"` 会让 Conflux 省略传给 Orca 的 `--model`，跟随客户端默认模型。
+- 付费路由须在分隔符 `--` 之前添加 `--authorize-paid "具体授权理由"`。
+- 本机入账派单保留分隔符之后的两个 Orca 参数。`--environment local` 固定在本机并覆盖 `ORCA_ENVIRONMENT`。`--json` 提供入账所需的 Dispatch ID。
+
+### `conflux usage` · 查询最近 5 小时
+
+```sh
+conflux usage
+conflux usage --codex-jsonl "$CODEX_SESSION_JSONL"
+```
+
+`--codex-jsonl` 可重复传入，用于查询指定 Codex 会话的 token 用量。`--now <ISO 8601 时间>` 可固定测试时钟，默认使用当前 UTC。实际订阅配额以服务商显示为准。
+
+### `conflux handoff publish|verify` · 发布与核验
+
+将下列六行写入 UTF-8 文件 `handoff.md`，填入真实 ID 和下一步。每行使用 LF，含末行。
 
 ```markdown
 # 接手测试
@@ -30,52 +89,57 @@ ID: sample
 Run: example-run
 Task: example-task
 Dispatch: example-dispatch
-Next: 核对 Worker 的终态和测试输出
+Next: 核对 Worker 终态和测试输出
 ```
 
 ```sh
 mkdir -p handoffs
-python3 conflux.py handoff publish --dir handoffs --file handoff.md
-python3 conflux.py handoff verify --dir handoffs --file handoff.md
+conflux handoff publish --dir handoffs --file handoff.md
+conflux handoff verify --dir handoffs --file handoff.md
 ```
 
-4. Codex 读 [AGENTS.md](AGENTS.md)，协调会话使用 `-s read-only -a never`。Claude Code 和 Gemini CLI 从各自的 [Claude 入口](CLAUDE.md) 和 [Gemini 入口](GEMINI.md) 加载共用规则。将 [Gemini Hook 示例](examples/gemini-before-tool.json) 的独立拒绝项追加到现有配置，保留既有 Orca 钩子，核对脚本路径并用工作区权限限制 shell。Antigravity 派单显式提供 [技能路径](.agents/skills/dispatch/SKILL.md)。
+交接原子发布到 `<dir>/<ID>.md`（`ID` 须匹配 `^[A-Za-z0-9._-]+$` 且不能为 `.` 或 `..`），核验按字节比较内容。
 
-## 边界
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 成功 |
+| `2` | 策略拒绝、参数无效或所需文件缺失 |
+| `10` | 交接发布重复，已有内容相同 |
+| `11` | 交接内容冲突 |
 
-- 策略与比例门禁覆盖经 Conflux 入口的派单。五小时比例以当前已落账记录计算，并发准入可读到同一快照。
-- 生命周期、断连恢复、请求重试和权限归 Orca 与客户端管理。Antigravity、SSH、WSL 缺少已验证的拒绝链路时按软约束处理。
-- Conflux 的范围限于单个薄 CLI 和协作规则。供应商计费、跨 runtime 统一所有权、状态迁移和自动重放超出范围。
-- 内部研究、会话与账号数据属于本地资料。按发布清单审查公开文件树和历史。
+`dispatch` 调用 Orca 后透传其退出码。完整参数与字段见 [CLI 契约](docs/cli-contract.md)。
 
-## 测试与许可
+## 4. 跨客户端接入
+
+| 客户端 | 规则入口 | 协调会话写保护 |
+| --- | --- | --- |
+| Codex | [AGENTS.md](AGENTS.md) | 以 `-s read-only -a never` 启动，执行者使用独立可写工作区 |
+| Claude Code | [CLAUDE.md](CLAUDE.md) 导入共用规则 | 使用客户端原生工具权限与工作区隔离 |
+| Gemini CLI | [GEMINI.md](GEMINI.md) 导入共用规则 | 保留现有 Orca hook，追加 [BeforeTool 示例](examples/gemini-before-tool.json) 中的独立拒绝条目，核对脚本路径，并用工作区权限覆盖 shell 等其他写入面 |
+| Antigravity | 提供 [AGENTS.md](AGENTS.md) 与 [派单 Skill](.agents/skills/dispatch/SKILL.md) 的路径 | 能隔离时使用文件权限或只读挂载，写入交给可写执行者 |
+
+## 5. 仓库文件地图
+
+| 路径 | 职责 |
+| --- | --- |
+| [`bin/conflux`](bin/conflux) | 跨项目启动器，注入用户级策略与账本默认值 |
+| [`conflux.py`](conflux.py) | 策略校验、派单、账本和用量查询 |
+| [`conflux_handoff.py`](conflux_handoff.py) | 六行交接格式、原子发布及核验 |
+| [`policy.json`](policy.json) | 四类路由及计费和保留终端的示例配置 |
+| [`AGENTS.md`](AGENTS.md) | 共用角色分工与协调者写保护规则 |
+| [`.agents/skills/dispatch/SKILL.md`](.agents/skills/dispatch/SKILL.md) | 按需加载的派单、查询与交接流程 |
+| [`docs/`](docs/) | CLI 契约、设计决策及发布清单 |
+| [`tests/`](tests/) | 自动化测试和公开发布检查 |
+
+## 6. 边界、测试与许可
+
+- 策略和比例门禁覆盖经 Conflux 入口的派单。配比基于已落账记录，并发准入可能读取同一快照。
+- 生命周期、断连恢复、请求重试和权限归 Orca 与客户端管理。Antigravity、SSH、WSL 缺少已验证的同步拒绝链路时，协调者写保护属于软约束。
+- 供应商计费、跨运行时统一所有权、状态迁移和自动重放超出范围。
+- 内部研究、会话和账号数据留在本地。公开前按 [发布与迁移清单](docs/release-checklist.md) 审查文件树与历史。
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-详见 [CLI 契约](docs/cli-contract.md) 和 [发布与迁移清单](docs/release-checklist.md)。手工 Orca 回归在隔离 Run 中执行。
-
-[MIT License](LICENSE)
-
-### 跨项目调用
-
-在 Conflux 仓库根目录运行以下命令，并确保 `~/.local/bin` 已加入 `PATH`。
-安装前请将仓库内的策略调整为实际模型。以下命令会保留已有的用户级策略。
-
-```sh
-mkdir -p "$HOME/.local/bin" "$HOME/.config/conflux" "$HOME/.local/state/conflux"
-ln -s "$(pwd -P)/bin/conflux" "$HOME/.local/bin/conflux"
-test -e "$HOME/.config/conflux/policy.json" || cp policy.json "$HOME/.config/conflux/policy.json"
-```
-
-在任意项目目录运行。策略和账本默认分别使用
-`~/.config/conflux/policy.json` 和 `~/.local/state/conflux/ledger.jsonl`，
-可用 `CONFLUX_POLICY`、`CONFLUX_LEDGER` 或优先级更高的显式参数覆盖。
-
-```sh
-conflux dispatch --agent codex --profile default --model "$CODEX_MODEL" --cwd . -- \
-  --from "$ORCA_SESSION" --spec "运行单测并报告结果" --worktree current --json
-conflux usage
-conflux handoff verify --dir handoffs --file handoff.md
-```
+手工 Orca 回归在隔离 Run 中执行。项目采用 [MIT License](LICENSE)。
