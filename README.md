@@ -3,59 +3,26 @@
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Conflux 是构建在 **Orca 原生编排**之上的极薄多 Agent 策略层，负责跨模型派单、额外付费硬护栏、5 小时滚动窗口配比，以及可核验的六行原子交接。
+Conflux 帮你在 Orca 中安全地协调多个 AI Agent。
 
-核心由 270 行有效 Python 代码组成（`conflux.py` 200 行、`conflux_handoff.py` 70 行，不计空行和注释），仅使用 Python 3.10+ 标准库，零第三方依赖。跨项目 Bash 包装器共 38 行。
+它用零第三方依赖的轻量代码处理付费护栏、限额配比和原子交接，执行生命周期交给 Orca。
 
-```text
-Coordinator --> Conflux (route / paid / ratio) --> Orca (Run / Task / Worker)
-                    |                                  |
-                    +<-------- dispatch receipt -------+
-                    +--------> ledger / usage
-                    +--------> atomic handoff / verify
-```
+装完后平时照常和 AI 聊天，需要派单时由 AI 按 Skill 调用 `conflux`。
 
-Run、Task、Worker 的生命周期、终态和资源回收由 Orca 原生管理。
+## 快速安装
 
-## 1. 派单速查
-
-简单任务由当前 Agent 直接回答。需要派单时，按下表选择角色。
-
-| 角色（`agent`） | 何时使用 | 约束 |
-| --- | --- | --- |
-| Codex（`codex`） | 主力厚委派，一次交付完整的规划、实现、调试、测试和证据 | 成功回执计入配比的 Codex 次数 |
-| DSH（`dsh`） | 独立、低风险、可并行，且净收益高于协调成本 | 示例策略自动追加 Orca 的 `--keep-open`。叶节点禁止再派生 |
-| Claude Code（`claude`） | 定点审查或重大裁决 | 默认拒绝付费派单。每次须显式传入 `--authorize-paid <理由>` |
-| Antigravity（`antigravity`） | 极轻协调，负责定契约、重大决策和验收 | 使用同一账本，近 5 小时须满足 `2 × (AGY + 1) < Codex` |
-
-配比以 UTC 滚动窗口内成功派单的唯一 Dispatch ID 计数，式中的 `+ 1` 代表候选派单。DSH 和 Claude Code 只计审计。
-
-## 2. 五分钟安装
-
-准备 **Python ≥ 3.10**、**macOS / Linux / WSL2（含 Bash）或原生 Windows** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
-
-**第一步：准备用户级策略与状态目录。** 在 Conflux 仓库根目录执行，已有用户级策略会保留。
+准备 Python ≥ 3.10 和已加入 PATH 的 Orca CLI。在 macOS、Linux 或 WSL 的仓库目录中运行：
 
 ```sh
-mkdir -p "$HOME/.config/conflux" "$HOME/.local/state/conflux"
-test -e "$HOME/.config/conflux/policy.json" ||
-  sed 's/"example"/"default"/g' policy.json > "$HOME/.config/conflux/policy.json"
+./install.sh --dry-run  # 可选：先检查，不写入
+./install.sh
 ```
 
-默认命令已把 `example` 替换为 `default`（跟随客户端默认模型）；如需固定模型，编辑 `~/.config/conflux/policy.json` 并保持 Claude 路由的 `billing` 为 `paid`。路由精确匹配 `agent`、`profile`、`model` 三元组。这里的 `profile` 是 Conflux 策略标签。
+脚本保留已有策略，遇到冲突文件或软链会停止；它不会修改 shell 配置。按输出提示设置 PATH，运行 `conflux usage` 验证。策略位于 `~/.config/conflux/policy.json`，账本位于 `~/.local/state/conflux/ledger.jsonl`；可用 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 覆盖。
 
-**第二步：软链命令与全局 Skill。** 仍在 Conflux 仓库根目录执行。
+### 原生 Windows（PowerShell）
 
-```sh
-mkdir -p "$HOME/.local/bin" "$HOME/.agents/skills"
-ln -sfn "$(pwd -P)/bin/conflux" "$HOME/.local/bin/conflux"
-ln -sfn "$(pwd -P)/.agents/skills/dispatch" "$HOME/.agents/skills/conflux-dispatch"
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-如需新终端也能使用，把最后一行加入 Shell 启动配置。随后可在任意项目目录调用 `conflux`。
-
-策略和账本的查找优先级依次是显式参数、`CONFLUX_POLICY` / `CONFLUX_LEDGER`、用户级默认路径。默认策略为 `~/.config/conflux/policy.json`，默认账本为 `~/.local/state/conflux/ledger.jsonl`。为防止外部仓库伪造策略，`bin/conflux` 绝不回退到当前目录的 `./policy.json`。
+原生 Windows 目前仅经 CI 验证，`install.ps1` 推迟至 v0.1.1。以下命令在仓库根目录执行：
 
 原生 Windows 从命令提示符运行 `bin\conflux.cmd`，需要将 Python 加入 PATH。
 在仓库根目录使用 PowerShell 准备目录和策略，并将 `bin` 加入当前会话的 PATH：
@@ -70,6 +37,23 @@ $env:PATH = "$(Join-Path (Get-Location) 'bin');$env:PATH"
 请避开 Microsoft Store 的 `python` 占位程序；编写 handoff 文件时避免使用可能写入 UTF-16 或 CRLF 的 PowerShell 重定向，须使用 UTF-8 和 LF。
 可通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定策略与账本。
 默认使用 `%USERPROFILE%\.config\conflux\policy.json` 和 `%USERPROFILE%\.local\state\conflux\ledger.jsonl`。
+
+### 第一次派单
+
+在 Orca 协调会话中告诉 AI：“请用 Codex 运行本项目的测试并报告结果。” AI 应按派单 Skill 执行；也可以参考下面的命令。
+
+## 进阶参考
+
+### 4-AI 速查
+
+| 角色 | 用途 | 约束 |
+| --- | --- | --- |
+| Codex | 主力执行 | 成功回执计入配比 |
+| DSH | 独立低风险辅助 | 叶节点，默认保留终端 |
+| Claude Code | 定点审查或重大裁决 | 每次付费派单需明确授权 |
+| Antigravity | 轻量协调与验收 | 候选须满足 `2 × (AGY + 1) < Codex` |
+
+该公式是针对滚动限额的内置代理指标，不使用 `antigravity` 路由完全不受影响。其他配比欢迎提 Issue，v0.2 将视需求考虑配置化。
 
 ## 3. 日常命令
 
