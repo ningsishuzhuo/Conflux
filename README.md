@@ -3,86 +3,88 @@
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Conflux 帮你在 Orca 中安全地协调多个 AI Agent。
+Conflux 是给 [Orca](https://github.com/stablyai/orca) 用的派单小工具：按你写的策略检查每次派单是否允许并记录用量，避免超出订阅额度或误用付费模型。核心约 270 行纯 Python 标准库，执行生命周期全交 Orca，不重复造轮子。
 
-它用零第三方依赖的轻量代码处理付费护栏、限额配比和原子交接，执行生命周期交给 Orca。
+状态：Alpha，接口可能调整。
 
-装完后平时照常和 AI 聊天，需要派单时由 AI 按 Skill 调用 `conflux`。
+安装 → 照常和 AI 聊天，需要派单时由 AI 自动调用 `conflux` → 用 `conflux usage` 看用量。
 
 ## 快速安装
 
-准备 Python ≥ 3.10 和已加入 PATH 的 Orca CLI。在 macOS、Linux 或 WSL 的仓库目录中运行：
+需要 Python ≥ 3.10 和已加入 PATH 的 [Orca CLI](https://github.com/stablyai/orca)。在 macOS、Linux 或 WSL 中运行：
 
 ```sh
-./install.sh --dry-run  # 可选：先检查，不写入
+git clone https://github.com/ningsishuzhuo/Conflux.git && cd Conflux
+./install.sh --dry-run  # 可选，检查但不写入
 ./install.sh
 ```
 
-脚本保留已有策略，遇到冲突文件或软链会停止；它不会修改 shell 配置。按输出提示设置 PATH，运行 `conflux usage` 验证。策略位于 `~/.config/conflux/policy.json`，账本位于 `~/.local/state/conflux/ledger.jsonl`；可用 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 覆盖。
+安装脚本将仓库示例策略中的 `"example"` 换成 `"default"`，写入 `~/.config/conflux/policy.json`；已有策略不会覆盖。它还会创建账本目录 `~/.local/state/conflux/`，以及指向本仓库的两个软链：`~/.local/bin/conflux` 和 `~/.agents/skills/conflux-dispatch`。移动或删除仓库后软链会失效；卸载时删除这两个软链即可。若软链位置已有其他文件，脚本会停止。
 
-### 原生 Windows（PowerShell）
+如果 `~/.local/bin` 不在 PATH 中，将下面一行写入 `~/.zshrc` 或 `~/.bashrc`，然后重开终端：
 
-原生 Windows 目前仅经 CI 验证，`install.ps1` 推迟至 v0.1.1。以下命令在仓库根目录执行：
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
 
-原生 Windows 从命令提示符运行 `bin\conflux.cmd`，需要将 Python 加入 PATH。
-在仓库根目录使用 PowerShell 准备目录和策略，并将 `bin` 加入当前会话的 PATH：
+运行 `conflux usage` 验证安装。
+
+<details>
+<summary>原生 Windows</summary>
+
+原生 Windows 目前仅通过 CI 验证，尚未对真实 Windows Orca 实测。在仓库根目录打开 PowerShell，确保使用真正的 Python，避开 Microsoft Store 的 `python` 占位程序，然后运行：
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME/.config/conflux", "$HOME/.local/state/conflux" | Out-Null
 $policy = "$HOME/.config/conflux/policy.json"
 if (!(Test-Path $policy)) { [IO.File]::WriteAllText($policy, (Get-Content -Raw policy.json).Replace('"example"', '"default"'), [Text.UTF8Encoding]::new($false)) }
 $env:PATH = "$(Join-Path (Get-Location) 'bin');$env:PATH"
+conflux usage
 ```
 
-请避开 Microsoft Store 的 `python` 占位程序；编写 handoff 文件时避免使用可能写入 UTF-16 或 CRLF 的 PowerShell 重定向，须使用 UTF-8 和 LF。
-可通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定策略与账本。
-默认使用 `%USERPROFILE%\.config\conflux\policy.json` 和 `%USERPROFILE%\.local\state\conflux\ledger.jsonl`。
+这里的 PATH 修改仅对当前会话有效。
 
-### 第一次派单
+</details>
 
-在 Orca 协调会话中告诉 AI：“请用 Codex 运行本项目的测试并报告结果。” AI 应按派单 Skill 执行；也可以参考下面的命令。
+## 第一次派单
 
-## 进阶参考
+在 Orca 会话中直接对 AI 说：「请用 Codex 运行本项目的测试并报告结果。」AI 会按派单 Skill 调用 Conflux。
 
-### 4-AI 速查
-
-| 角色 | 用途 | 约束 |
-| --- | --- | --- |
-| Codex | 主力执行 | 成功回执计入配比 |
-| DSH | 独立低风险辅助 | 叶节点，默认保留终端 |
-| Claude Code | 定点审查或重大裁决 | 每次付费派单需明确授权 |
-| Antigravity | 轻量协调与验收 | 候选须满足 `2 × (AGY + 1) < Codex` |
-
-该公式是针对滚动限额的内置代理指标，不使用 `antigravity` 路由完全不受影响。其他配比欢迎提 Issue，v0.2 将视需求考虑配置化。
-
-## 3. 日常命令
-
-### `conflux dispatch` · 派单
-
-将 `ORCA_SESSION` 设为当前协调会话 ID。下例要求用户策略有 `codex / default / default` 路由。
+也可以手动试跑：将 `$ORCA_SESSION` 设为当前 Orca 会话 ID，使用下面的命令。示例策略需要有 `codex / default / default` 路由。
 
 ```sh
 conflux dispatch --agent codex --profile default --model default --cwd . -- \
   --from "$ORCA_SESSION" --spec "运行单测并报告失败项" \
   --worktree current --environment local --json
-```
-
-- 策略中的 `"model": "default"` 会让 Conflux 省略传给 Orca 的 `--model`，跟随客户端默认模型。
-- 付费路由须在分隔符 `--` 之前添加 `--authorize-paid "具体授权理由"`。
-- 本机入账派单保留分隔符之后的两个 Orca 参数。`--environment local` 固定在本机并覆盖 `ORCA_ENVIRONMENT`。`--json` 提供入账所需的 Dispatch ID。
-
-### `conflux usage` · 查询最近 5 小时
-
-```sh
 conflux usage
-conflux usage --codex-jsonl "$CODEX_SESSION_JSONL"
 ```
 
-`--codex-jsonl` 可重复传入，用于查询指定 Codex 会话的 token 用量。`--now <ISO 8601 时间>` 可固定测试时钟，默认使用当前 UTC。实际订阅配额以服务商显示为准。
+成功派发一次 Codex 后，用量输出示例：`{"window_hours": 5, "agy_calls": 0, "codex_calls": 1, "other_calls": 0, "agy_allowed_next": false, "metric_kind": "conflux_dispatch_proxy"}`。实际值取决于近 5 小时的账本记录。
 
-### `conflux handoff publish|verify` · 发布与核验
+## 角色分工
 
-将下列六行写入 UTF-8 文件 `handoff.md`，填入真实 ID 和下一步。每行使用 LF，含末行。
+| 角色 | 用途 | 约束 |
+| --- | --- | --- |
+| Codex | 主力执行 | 成功派单计入配比 |
+| DSH（DeepSeek Harness） | 独立低风险辅助 | 不能再派生子任务，默认保留终端 |
+| Claude Code | 定点审查或重大裁决 | 每次付费派单需明确授权 |
+| Antigravity（AGY） | 轻量协调与验收 | 受下述配比限制 |
+
+派发 Antigravity 前，近 5 小时 Antigravity 成功次数的 2 倍必须小于 Codex 成功次数；检查时还会把这次准备派发的 Antigravity 算进去，即 `2 × (AGY + 1) < Codex`。这是针对滚动限额的内置规则，不用 `antigravity` 路由不受影响；需要其他配比可以提 Issue 或 fork。
+
+## 命令参考
+
+### `dispatch`
+
+`conflux dispatch` 检查策略后调用 Orca。`--` 前面是 Conflux 参数，后面原样传给 Orca；上面的示例通过 `--environment local` 指定本机，并用 `--json` 提供记入账本所需的 Dispatch ID。策略中的 `"model": "default"` 会让 Orca 使用客户端默认模型。付费路由须在 `--` 之前添加 `--authorize-paid "具体授权理由"`。
+
+### `usage`
+
+`conflux usage` 输出最近 5 小时的派单统计。实际订阅配额以服务商显示为准；策略和账本路径可分别通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定。
+
+### `handoff`
+
+换客户端接力时，`handoff` 把任务状态写成 6 行文件，防止重复发布或覆盖已有内容。创建 UTF-8 文件 `handoff.md`，每行使用 LF，并以换行结尾：
 
 ```markdown
 # 接手测试
@@ -99,51 +101,52 @@ conflux handoff publish --dir handoffs --file handoff.md
 conflux handoff verify --dir handoffs --file handoff.md
 ```
 
-交接原子发布到 `<dir>/<ID>.md`（`ID` 须匹配 `^[A-Za-z0-9._-]+$` 且不能为 `.` 或 `..`），核验按字节比较内容。
+常见退出码：`0` 成功，`2` 策略拒绝或输入无效，`10` 交接内容重复，`11` 交接内容冲突；完整说明见 [CLI 契约](docs/cli-contract.md)。
 
-| 退出码 | 含义 |
-| --- | --- |
-| `0` | 成功 |
-| `2` | 策略拒绝、参数无效或所需文件缺失 |
-| `10` | 交接发布重复，已有内容相同 |
-| `11` | 交接内容冲突 |
-
-`dispatch` 调用 Orca 后透传其退出码。完整参数与字段见 [CLI 契约](docs/cli-contract.md)。
-
-## 4. 跨客户端接入
+## 跨客户端接入
 
 | 客户端 | 规则入口 | 协调会话写保护 |
 | --- | --- | --- |
 | Codex | [AGENTS.md](AGENTS.md) | 以 `-s read-only -a never` 启动，执行者使用独立可写工作区 |
 | Claude Code | [CLAUDE.md](CLAUDE.md) 导入共用规则 | 使用客户端原生工具权限与工作区隔离 |
-| Gemini CLI | [GEMINI.md](GEMINI.md) 导入共用规则 | 保留现有 Orca hook，追加 [BeforeTool 示例](examples/gemini-before-tool.json) 中的独立拒绝条目，核对脚本路径，并用工作区权限覆盖 shell 等其他写入面 |
+| Gemini CLI | [GEMINI.md](GEMINI.md) 导入共用规则 | 保留 Orca hook，追加 [BeforeTool 示例](examples/gemini-before-tool.json) 中的独立拒绝条目，核对脚本路径，并用工作区权限覆盖 shell 等其他写入面 |
 | Antigravity | 提供 [AGENTS.md](AGENTS.md) 与 [派单 Skill](.agents/skills/dispatch/SKILL.md) 的路径 | 能隔离时使用文件权限或只读挂载，写入交给可写执行者 |
 
-## 5. 仓库文件地图
+## 仓库文件地图
 
 | 路径 | 职责 |
 | --- | --- |
-| [`bin/conflux`](bin/conflux) | 跨项目启动器，注入用户级策略与账本默认值 |
+| [`install.sh`](install.sh) | macOS、Linux 和 WSL 安装脚本 |
+| [`bin/conflux`](bin/conflux) | 启动器，设置用户级策略与账本默认值 |
+| [`bin/conflux.cmd`](bin/conflux.cmd) | Windows 启动器 |
 | [`conflux.py`](conflux.py) | 策略校验、派单、账本和用量查询 |
-| [`conflux_handoff.py`](conflux_handoff.py) | 六行交接格式、原子发布及核验 |
+| [`conflux_handoff.py`](conflux_handoff.py) | 六行交接格式、发布及核验 |
 | [`policy.json`](policy.json) | 四类路由及计费和保留终端的示例配置 |
 | [`AGENTS.md`](AGENTS.md) | 共用角色分工与协调者写保护规则 |
-| [`.agents/skills/dispatch/SKILL.md`](.agents/skills/dispatch/SKILL.md) | 按需加载的派单、查询与交接流程 |
+| [`.agents/skills/dispatch/SKILL.md`](.agents/skills/dispatch/SKILL.md) | 派单、查询与交接流程 |
 | [`docs/`](docs/) | CLI 契约、设计决策及发布清单 |
 | [`tests/`](tests/) | 自动化测试和公开发布检查 |
 
-## 6. 边界、测试与许可
+## 做什么与不做什么
 
-- 策略和比例门禁覆盖经 Conflux 入口的派单。配比基于已落账记录，并发准入可能读取同一快照。
-- 生命周期、断连恢复、请求重试和权限归 Orca 与客户端管理。Antigravity、SSH、WSL 缺少已验证的同步拒绝链路时，协调者写保护属于软约束。
-- 供应商计费、跨运行时统一所有权、状态迁移和自动重放超出范围。
-- 原生 Windows 当前仅通过三平台 CI 假 Orca 验证，尚未对真实 Windows Orca 端到端实测。
+Conflux 检查经过它的派单，按成功回执记录用量，并提供交接文件的发布和核验。
+
+Orca 和客户端负责执行、断连恢复、重试及权限。Conflux 不负责供应商计费、状态迁移或自动重放。Antigravity、SSH 和 WSL 无法在写入时立即拦截时，协调者写保护只能作为约定。
+
+## 测试
+
+macOS、Linux 和 WSL：
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
-手工 Orca 回归在隔离 Run 中执行。项目采用 [MIT License](LICENSE)。
+Windows：
 
-项目目前处于 Alpha 阶段，接口和行为可能调整。
-欢迎通过 [Issue](https://github.com/ningsishuzhuo/Conflux/issues) 反馈问题和建议。
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## 许可
+
+[MIT License](LICENSE) · [Issue](https://github.com/ningsishuzhuo/Conflux/issues)
