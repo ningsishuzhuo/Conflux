@@ -1,8 +1,11 @@
 # Conflux
 
+[![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Conflux 是构建在 **Orca 原生编排**之上的极薄多 Agent 策略层，负责跨模型派单、额外付费硬护栏、5 小时滚动窗口配比，以及可核验的六行原子交接。
 
-核心由 251 行有效 Python 代码组成（不计空行和注释），仅使用 Python 3.8+ 标准库，零第三方依赖。跨项目 Bash 包装器共 38 行。
+核心由 270 行有效 Python 代码组成（`conflux.py` 200 行、`conflux_handoff.py` 70 行，不计空行和注释），仅使用 Python 3.10+ 标准库，零第三方依赖。跨项目 Bash 包装器共 38 行。
 
 ```text
 Coordinator --> Conflux (route / paid / ratio) --> Orca (Run / Task / Worker)
@@ -29,7 +32,7 @@ Run、Task、Worker 的生命周期、终态和资源回收由 Orca 原生管理
 
 ## 2. 五分钟安装
 
-准备 **Python ≥ 3.8**、**macOS / Linux / WSL2（含 Bash）或原生 Windows** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
+准备 **Python ≥ 3.10**、**macOS / Linux / WSL2（含 Bash）或原生 Windows** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
 
 **第一步：准备用户级策略与状态目录。** 在 Conflux 仓库根目录执行，已有用户级策略会保留。
 
@@ -55,6 +58,16 @@ export PATH="$HOME/.local/bin:$PATH"
 策略和账本的查找优先级依次是显式参数、`CONFLUX_POLICY` / `CONFLUX_LEDGER`、用户级默认路径。默认策略为 `~/.config/conflux/policy.json`，默认账本为 `~/.local/state/conflux/ledger.jsonl`。为防止外部仓库伪造策略，`bin/conflux` 绝不回退到当前目录的 `./policy.json`。
 
 原生 Windows 从命令提示符运行 `bin\conflux.cmd`，需要将 Python 加入 PATH。
+在仓库根目录使用 PowerShell 准备目录和策略，并将 `bin` 加入当前会话的 PATH：
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME/.config/conflux", "$HOME/.local/state/conflux" | Out-Null
+$policy = "$HOME/.config/conflux/policy.json"
+if (!(Test-Path $policy)) { [IO.File]::WriteAllText($policy, (Get-Content -Raw policy.json).Replace('"example"', '"default"'), [Text.UTF8Encoding]::new($false)) }
+$env:PATH = "$(Join-Path (Get-Location) 'bin');$env:PATH"
+```
+
+请避开 Microsoft Store 的 `python` 占位程序；编写 handoff 文件时避免使用可能写入 UTF-16 或 CRLF 的 PowerShell 重定向，须使用 UTF-8 和 LF。
 可通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定策略与账本。
 默认使用 `%USERPROFILE%\.config\conflux\policy.json` 和 `%USERPROFILE%\.local\state\conflux\ledger.jsonl`。
 
@@ -140,10 +153,13 @@ conflux handoff verify --dir handoffs --file handoff.md
 - 策略和比例门禁覆盖经 Conflux 入口的派单。配比基于已落账记录，并发准入可能读取同一快照。
 - 生命周期、断连恢复、请求重试和权限归 Orca 与客户端管理。Antigravity、SSH、WSL 缺少已验证的同步拒绝链路时，协调者写保护属于软约束。
 - 供应商计费、跨运行时统一所有权、状态迁移和自动重放超出范围。
-- 内部研究、会话和账号数据留在本地。公开前按 [发布与迁移清单](docs/release-checklist.md) 审查文件树与历史。
+- 原生 Windows 当前仅通过三平台 CI 假 Orca 验证，尚未对真实 Windows Orca 端到端实测。
 
 ```sh
 python3 -m unittest discover -s tests -v
 ```
 
 手工 Orca 回归在隔离 Run 中执行。项目采用 [MIT License](LICENSE)。
+
+项目目前处于 Alpha 阶段，接口和行为可能调整。
+欢迎通过 [Issue](https://github.com/ningsishuzhuo/Conflux/issues) 反馈问题和建议。
