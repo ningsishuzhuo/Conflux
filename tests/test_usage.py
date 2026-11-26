@@ -6,6 +6,8 @@ import sys
 import tempfile
 import unittest
 
+from test_dispatch import fake_orca
+
 
 CLI = Path(__file__).resolve().parents[1] / "conflux.py"
 NOW = "2026-11-26T10:00:00Z"
@@ -23,17 +25,23 @@ class UsageTests(unittest.TestCase):
             dict(agent=agent, profile="p", model="m", billing="subscription",
                  keep_open_default=False)
             for agent in ("codex", "antigravity", "dsh", "claude")
-        ]}))
-        self.orca = self.root / "orca"
-        self.orca.write_text("""#!/bin/sh
-if [ "$7" = '{"dispatchId": "c3"}' ] && [ -f ledger.lock ]; then
-    python3 -c 'import fcntl; fcntl.flock(open("ledger.lock"), fcntl.LOCK_EX | fcntl.LOCK_NB)' || exit 99
-fi
-printf '%s' "$7"
-printf 'orca stderr' >&2
-exit "$8"
+        ]}), encoding="utf-8")
+        self.orca = fake_orca(self.root / "orca", """import json, os, sys
+receipt = bytes.fromhex(sys.argv[7]).decode("utf-8")
+if json.loads(receipt).get("dispatchId") == "c3" and os.path.isfile("ledger.lock"):
+    with open("ledger.lock", "a+b") as lock:
+        if os.name == "nt":
+            import msvcrt
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+print(receipt, end="")
+print("orca stderr", end="", file=sys.stderr)
+sys.exit(int(sys.argv[8]))
 """)
-        self.orca.chmod(0o755)
 
     def run_cli(self, command, *args):
         return subprocess.run(
@@ -48,11 +56,11 @@ exit "$8"
         return self.run_cli(
             "dispatch", "--policy", str(self.policy), "--agent", agent,
             "--profile", "p", "--model", "m", "--cwd", str(self.root),
-            "--orca-bin", str(self.orca), "--", json.dumps(receipt), str(status)
+            "--orca-bin", str(self.orca), "--", json.dumps(receipt).encode("utf-8").hex(), str(status)
         )
 
     def rows(self):
-        return [json.loads(line) for line in self.ledger.read_text().splitlines()]
+        return [json.loads(line) for line in self.ledger.read_text(encoding="utf-8").splitlines()]
 
     def usage(self, *args):
         result = self.run_cli("usage", *args)
@@ -79,7 +87,7 @@ exit "$8"
         ]
         self.ledger.write_text("".join(json.dumps(dict(ts=ts, dispatch_id=key,
                                                        agent="codex")) + "\n"
-                                       for ts, key in rows))
+                                       for ts, key in rows), encoding="utf-8")
         before = self.ledger.read_bytes()
         self.assertEqual(self.usage(), dict(window_hours=5, codex_calls=2,
                          agy_calls=0, other_calls=0, agy_allowed_next=False,
@@ -130,7 +138,7 @@ exit "$8"
         events = [dict(timestamp=ts, type="event_msg", payload=dict(
             type="token_count", info={field: dict(total_tokens=value)}))
             for ts, field, value in rows]
-        log.write_text("".join(json.dumps(event) + "\n" for event in [*earlier, *events]))
+        log.write_text("".join(json.dumps(event) + "\n" for event in [*earlier, *events]), encoding="utf-8")
         return self.usage("--codex-jsonl", str(log), "--codex-jsonl", str(log))[
             "codex_tokens"]
 
@@ -170,7 +178,7 @@ exit "$8"
         self.assertEqual((evidence["status"], evidence["total_tokens"]), ("ok", 25))
 
     def test_only_antigravity_prechecks_malformed_ledger(self):
-        self.ledger.write_text("[]\n")
+        self.ledger.write_text("[]\n", encoding="utf-8")
         for agent in ("codex", "dsh", "claude"):
             result = self.dispatch(agent, agent)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -189,7 +197,7 @@ exit "$8"
         self.assertEqual(self.usage()["codex_calls"], 2)
 
     def test_invalid_usage_shapes_are_cli_errors(self):
-        self.ledger.write_text("[]\n")
+        self.ledger.write_text("[]\n", encoding="utf-8")
         result = self.run_cli("usage")
         self.assertEqual(result.returncode, 2)
         self.assertNotIn("Traceback", result.stderr)
@@ -199,7 +207,7 @@ exit "$8"
                     dict(timestamp=NOW, type="token_count", info=[]),
                     dict(timestamp=NOW, type="token_count", total_token_usage=[])):
             with self.subTest(row=row):
-                log.write_text(json.dumps(row) + "\n")
+                log.write_text(json.dumps(row) + "\n", encoding="utf-8")
                 result = self.run_cli("usage", "--codex-jsonl", str(log))
                 self.assertEqual(result.returncode, 2)
                 self.assertNotIn("Traceback", result.stderr)

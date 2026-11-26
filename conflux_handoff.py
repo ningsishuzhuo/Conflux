@@ -1,9 +1,32 @@
 import argparse
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
 import sys
 from uuid import uuid4
+
+
+@contextmanager
+def exclusive_lock(path):
+    with path.open("a+b") as lock:
+        if os.name == "nt":
+            import msvcrt
+            from time import sleep
+            lock.seek(0)
+            try:
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                sleep(0.02)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def destination(directory, data):
@@ -15,18 +38,16 @@ def destination(directory, data):
     if not fields or not all(value.strip() for value in fields.groups()):
         raise ValueError("expected six nonempty LF-terminated handoff fields")
     key = fields[2]
-    if key in (".", ".."):
-        raise ValueError("invalid handoff ID")
     directory = directory.resolve(strict=True)
     final = directory / (key + ".md")
-    if not directory.is_dir() or final.resolve().parent != directory:
+    if key in (".", "..") or not directory.is_dir() or final.resolve().parent != directory:
         raise ValueError("invalid handoff directory or destination")
     return final
 
 
 def publish(final, data):
     temporary = final.parent / f".handoff-{uuid4().hex}"
-    descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_BINARY', 0), 0o600)
     try:
         with os.fdopen(descriptor, "wb") as output:
             output.write(data)

@@ -5,6 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_PATHS = (
     "conflux.py", "conflux_handoff.py", "bin/conflux", "policy.json", "README.md", "LICENSE",
+    "bin/conflux.cmd", ".github/workflows/test.yml",
     "AGENTS.md", "CLAUDE.md", "GEMINI.md", ".agents", "examples",
     "docs/design.md", "docs/cli-contract.md", "docs/release-checklist.md",
     "docs/friction-log.md", "docs/adr",

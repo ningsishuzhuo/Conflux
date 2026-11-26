@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -7,6 +8,19 @@ import unittest
 
 
 CLI = Path(__file__).resolve().parents[1] / "conflux.py"
+
+
+def fake_orca(path, source):
+    if os.name == "nt":
+        script = path.with_suffix(".py")
+        script.write_text(source, encoding="utf-8")
+        wrapper = path.with_suffix(".cmd")
+        wrapper.write_text(f'@echo off\n"{sys.executable}" "%~dpn0.py" %*\n',
+                           encoding="utf-8")
+        return wrapper
+    path.write_text(f"#!{sys.executable}\n" + source, encoding="utf-8")
+    path.chmod(0o700)
+    return path
 
 
 class DispatchTests(unittest.TestCase):
@@ -30,19 +44,17 @@ class DispatchTests(unittest.TestCase):
         self.write_stub()
 
     def write_policy(self):
-        self.policy.write_text(json.dumps({"routes": self.routes}))
+        self.policy.write_text(json.dumps({"routes": self.routes}), encoding="utf-8")
 
     def write_stub(self, status=0):
-        self.stub.write_text(
-            f"#!{sys.executable}\n"
+        self.stub = fake_orca(self.stub,
             "import json, os, pathlib, sys\n"
             f"pathlib.Path({str(self.calls)!r}).write_text("
-            "json.dumps([os.getcwd(), sys.argv[1:]]))\n"
+            "json.dumps([os.getcwd(), sys.argv[1:]]), encoding='utf-8')\n"
             "print('{\"dispatchId\":\"d1\",\"requestId\":\"r1\"}')\n"
             "print('orca stderr', file=sys.stderr)\n"
             f"sys.exit({status})\n"
         )
-        self.stub.chmod(0o700)
 
     def dispatch(self, agent="codex", *, model="example", cwd=None, options=(), native=()):
         return subprocess.run(
@@ -54,7 +66,7 @@ class DispatchTests(unittest.TestCase):
         )
 
     def assert_called(self, agent, *native):
-        cwd, argv = json.loads(self.calls.read_text())
+        cwd, argv = json.loads(self.calls.read_text(encoding="utf-8"))
         self.assertEqual(Path(cwd).resolve(), self.root.resolve())
         self.assertEqual(argv, [
             "orchestration", "worker-start", "--agent", agent, "--model",
@@ -79,7 +91,7 @@ class DispatchTests(unittest.TestCase):
         self.assert_rejected(self.dispatch(model="default", native=("--model=example",)))
         result = self.dispatch(model="default", native=("--json",))
         self.assertEqual(result.returncode, 0, result.stderr)
-        _, argv = json.loads(self.calls.read_text())
+        _, argv = json.loads(self.calls.read_text(encoding="utf-8"))
         self.assertEqual(argv, ["orchestration", "worker-start", "--agent", "codex", "--json"])
 
     def test_low_cost_adds_keep_open_only_when_absent(self):
@@ -123,6 +135,6 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(result.stderr, "orca stderr\n")
 
     def test_production_line_limit(self):
-        lines = CLI.read_text().splitlines()
+        lines = CLI.read_text(encoding="utf-8").splitlines()
         self.assertLessEqual(sum(bool(line.strip()) and not line.lstrip().startswith("#")
                                  for line in lines), 200)

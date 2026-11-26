@@ -29,7 +29,7 @@ Run、Task、Worker 的生命周期、终态和资源回收由 Orca 原生管理
 
 ## 2. 五分钟安装
 
-准备 **Python ≥ 3.8**、**POSIX 环境（macOS / Linux，含 Bash）** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
+准备 **Python ≥ 3.8**、**macOS / Linux / WSL2（含 Bash）或原生 Windows** 和可用的 **Orca CLI**。升级对照版本为 **1.4.273**。派单需要当前 Orca 会话，可用 `orca orchestration worker-start --help` 核对原生参数。
 
 **第一步：准备用户级策略与状态目录。** 在 Conflux 仓库根目录执行，已有用户级策略会保留。
 
@@ -53,6 +53,10 @@ export PATH="$HOME/.local/bin:$PATH"
 如需新终端也能使用，把最后一行加入 Shell 启动配置。随后可在任意项目目录调用 `conflux`。
 
 策略和账本的查找优先级依次是显式参数、`CONFLUX_POLICY` / `CONFLUX_LEDGER`、用户级默认路径。默认策略为 `~/.config/conflux/policy.json`，默认账本为 `~/.local/state/conflux/ledger.jsonl`。为防止外部仓库伪造策略，`bin/conflux` 绝不回退到当前目录的 `./policy.json`。
+
+原生 Windows 从命令提示符运行 `bin\conflux.cmd`，需要将 Python 加入 PATH。
+可通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定策略与账本。
+默认使用 `%USERPROFILE%\.config\conflux\policy.json` 和 `%USERPROFILE%\.local\state\conflux\ledger.jsonl`。
 
 ## 3. 日常命令
 

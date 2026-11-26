@@ -1,14 +1,14 @@
 import argparse
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-import fcntl
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 
 
-from conflux_handoff import handoff
+from conflux_handoff import exclusive_lock, handoff
 
 
 DATA_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
@@ -48,9 +48,8 @@ def load_routes(path):
 
 
 def utc(value=None):
-    if value is None:
-        return datetime.now(timezone.utc)
-    stamp = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    stamp = datetime.now(timezone.utc) if value is None else datetime.fromisoformat(
+        value[:-1] + "+00:00" if value.endswith("Z") else value)
     return stamp.replace(tzinfo=stamp.tzinfo or timezone.utc).astimezone(timezone.utc)
 
 
@@ -84,22 +83,21 @@ def append_receipt(path, output, now, route):
     except ValueError:
         receipt = {}
     sources = (receipt, receipt.get("result")) if isinstance(receipt, dict) else ()
-    ids = (item.get("dispatchId") for item in sources if isinstance(item, dict))
-    key = next((key for key in ids if isinstance(key, str) and key.strip()), None)
+    key = next((item["dispatchId"] for item in sources if isinstance(item, dict)
+                and isinstance(item.get("dispatchId"), str) and item["dispatchId"].strip()), None)
     if key is None:
         print("\nwarning: Orca receipt has no dispatchId", file=sys.stderr)
         return
     row = dict(ts=now.isoformat().replace("+00:00", "Z"), dispatch_id=key,
                **{field: route[field] for field in (*ROUTE_KEY, "billing")})
-    with path.with_name(path.name + ".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with exclusive_lock(path.with_name(path.name + ".lock")):
         if any(existing["dispatch_id"] == key for existing in ledger_rows(path)):
             return
         with path.open("a+b") as ledger:
             if ledger.tell():
                 ledger.seek(-1, 2)
             prefix = b"\n" if ledger.read(1) not in (b"", b"\n") else b""
-            ledger.write(prefix + (json.dumps(row) + "\n").encode())
+            ledger.write(prefix + (json.dumps(row) + "\n").encode("utf-8"))
 
 
 def codex_tokens(path, now):
@@ -141,9 +139,13 @@ def codex_tokens(path, now):
     return dict(evidence, status="ok", total_tokens=tokens)
 
 
-def usage(argv):
+def user_path(variable, suffix):
+    return Path(os.environ.get(variable) or Path(os.environ["USERPROFILE"]) / suffix)
+
+
+def usage(argv, ledger=None):
     parser = argparse.ArgumentParser(prog="conflux.py usage", allow_abbrev=False)
-    parser.add_argument("--ledger", required=True, type=Path)
+    parser.add_argument("--ledger", required=ledger is None, default=ledger, type=Path)
     parser.add_argument("--codex-jsonl", action="append", type=Path, default=[])
     parser.add_argument("--now")
     args = parser.parse_args(argv)
@@ -160,26 +162,28 @@ def usage(argv):
 
 
 def main(argv):
-    if argv and (handler := {"usage": usage, "handoff": handoff}.get(argv[0])):
-        return handler(argv[1:])
+    if windows_wrapper := argv[:1] == ["--windows-wrapper"]:
+        argv = argv[1:]
+    ledger = user_path("CONFLUX_LEDGER", ".local/state/conflux/ledger.jsonl") if windows_wrapper and argv[:1] in (["usage"], ["dispatch"]) else None
+    if argv[:1] in (["usage"], ["handoff"]):
+        return usage(argv[1:], ledger) if argv[0] == "usage" else handoff(argv[1:])
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("command", choices=("dispatch",))
-    parser.add_argument("--policy", required=True, type=Path)
+    parser.add_argument("--policy", required=not (windows_wrapper and argv[:1] == ["dispatch"]), type=Path)
     for field in ROUTE_KEY:
         parser.add_argument(f"--{field}", required=True)
     parser.add_argument("--cwd", required=True, type=Path)
     parser.add_argument("--authorize-paid", default="")
     parser.add_argument("--orca-bin", default="orca")
-    parser.add_argument("--ledger", type=Path)
+    parser.add_argument("--ledger", type=Path, default=ledger)
     parser.add_argument("--now")
 
     separator = argv.index("--") if "--" in argv else len(argv)
     args = parser.parse_args(argv[:separator])
     if args.agent == "antigravity" and args.ledger is None:
         parser.error("antigravity requires --ledger")
-    native = argv[separator + 1:]
     try:
-        routes = load_routes(args.policy)
+        routes = load_routes(args.policy or user_path("CONFLUX_POLICY", ".config/conflux/policy.json"))
     except (OSError, ValueError) as error:
         parser.error(f"cannot load policy: {error}")
     route = routes.get((args.agent, args.profile, args.model))
@@ -189,22 +193,20 @@ def main(argv):
         parser.error("paid route requires --authorize-paid with a nonblank reason")
     if not args.cwd.is_dir():
         parser.error("--cwd must be an existing directory")
-    for token in native:
+    for token in (native := argv[separator + 1:]):
         if (flag := token.partition("=")[0]) in BLOCKED:
             parser.error(f"Orca arguments cannot override {flag}")
 
-    if args.ledger is not None:
-        args.ledger = args.ledger.resolve()
+    ledger = args.ledger.resolve() if args.ledger is not None else None
     if args.agent == "antigravity":
         try:
-            if not window(args.ledger, utc(args.now))["agy_allowed_next"]:
+            if not window(ledger, utc(args.now))["agy_allowed_next"]:
                 parser.error("antigravity exceeds the 5-hour dispatch ratio")
         except DATA_ERRORS as error:
             parser.error(f"cannot read ledger: {error}")
-    binary = str(Path(args.orca_bin).absolute()) if "/" in args.orca_bin else args.orca_bin
+    binary = str(Path(args.orca_bin).absolute()) if os.path.dirname(args.orca_bin) else args.orca_bin
     command = [binary, "orchestration", "worker-start", "--agent", args.agent, *([] if args.model == "default" else ["--model", args.model]), *native]
-    if route["keep_open_default"] and "--keep-open" not in native:
-        command.append("--keep-open")
+    command += ["--keep-open"] if route["keep_open_default"] and "--keep-open" not in native else []
     try:
         result = subprocess.run(command, cwd=args.cwd, stdout=subprocess.PIPE if args.ledger else None)
     except OSError as error:
@@ -215,7 +217,7 @@ def main(argv):
         sys.stdout.buffer.flush()
         if result.returncode == 0:
             try:
-                append_receipt(args.ledger, result.stdout, utc(args.now), route)
+                append_receipt(ledger, result.stdout, utc(args.now), route)
             except DATA_ERRORS as error:
                 print(f"cannot append ledger: {error}", file=sys.stderr)
     return result.returncode if result.returncode >= 0 else 128 - result.returncode

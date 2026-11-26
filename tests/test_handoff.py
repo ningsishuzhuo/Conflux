@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -56,16 +57,23 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(self.handoff("verify", OTHER), 11)
         self.assertEqual(self.final.read_bytes(), NOTE)
 
-    def test_invalid_directory_and_symlink_escape(self):
+    def test_invalid_directory(self):
+        self.directory /= "missing"
+        self.assertEqual(self.handoff("publish"), 2)
+
+    def test_symlink_escape(self):
         with tempfile.TemporaryDirectory() as outside:
             target = Path(outside) / "target.md"
             target.write_bytes(NOTE)
-            self.final.symlink_to(target)
+            try:
+                self.final.symlink_to(target)
+            except OSError as error:
+                if os.name != "nt" or error.winerror not in (5, 1314):
+                    raise
+                self.skipTest("Windows symlink creation requires additional privileges")
             self.assertEqual(self.handoff("verify"), 2)
             self.assertEqual(self.handoff("publish"), 2)
             self.assertEqual(target.read_bytes(), NOTE)
-        self.directory /= "missing"
-        self.assertEqual(self.handoff("publish"), 2)
 
     def test_concurrent_publish(self):
         inputs = [NOTE, OTHER] * 8

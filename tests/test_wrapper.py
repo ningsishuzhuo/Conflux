@@ -6,6 +6,8 @@ import sys
 import tempfile
 import unittest
 
+from test_dispatch import fake_orca
+
 ROOT = Path(__file__).resolve().parents[1]
 NOW = "2026-01-01T12:00:00Z"
 
@@ -20,22 +22,24 @@ class WrapperTests(unittest.TestCase):
         self.ledger = home / ".local/state/conflux/ledger.jsonl"
         for path in (self.policy, self.ledger):
             path.parent.mkdir(parents=True)
-        self.env = dict(os.environ, HOME=str(home))
+        self.env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))
         for name in ("CONFLUX_POLICY", "CONFLUX_LEDGER"):
             self.env.pop(name, None)
 
-        self.entry = self.cwd / "conflux"
-        (self.cwd / "relative-link").symlink_to(ROOT / "bin/conflux")
-        self.entry.symlink_to("relative-link")
-        self.policy.write_text((ROOT / "policy.json").read_text())
+        if os.name == "nt":
+            self.entry = ROOT / "bin/conflux.cmd"
+        else:
+            self.entry = self.cwd / "conflux"
+            (self.cwd / "relative-link").symlink_to(ROOT / "bin/conflux")
+            self.entry.symlink_to("relative-link")
+        self.policy.write_text((ROOT / "policy.json").read_text(encoding="utf-8"), encoding="utf-8")
         self.local_policy = self.cwd / "policy.json"
         self.local_policy.write_text(
-            self.policy.read_text().replace('"paid"', '"subscription"')
+            self.policy.read_text(encoding="utf-8").replace('"paid"', '"subscription"'),
+            encoding="utf-8",
         )
-        orca = self.cwd / "fake orca"
-        orca.write_text("#!/usr/bin/env python3\nimport json, sys\n"
-                        "print(json.dumps(dict(dispatchId='receipt', args=sys.argv[1:])))\n")
-        orca.chmod(0o755)
+        orca = fake_orca(self.cwd / "fake orca", "import json, sys\n"
+                         "print(json.dumps(dict(dispatchId='receipt', args=sys.argv[1:])))\n")
         self.dispatch = ("dispatch", "--agent", "claude", "--profile", "default",
                          "--model", "example", "--cwd", ".", "--orca-bin", str(orca),
                          "--now", NOW)
@@ -68,7 +72,7 @@ class WrapperTests(unittest.TestCase):
             with self.subTest(options=options):
                 result = self.run_cli(*self.dispatch, *options)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(explicit_ledger.read_text())["billing"],
+                self.assertEqual(json.loads(explicit_ledger.read_text(encoding="utf-8"))["billing"],
                                  "subscription")
                 explicit_ledger.unlink()
         self.assertFalse(self.ledger.exists())
@@ -81,12 +85,12 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["args"],
                          ["orchestration", "worker-start", "--agent", "claude",
                           "--model", "example", *native])
-        self.assertEqual(json.loads(self.ledger.read_text())["dispatch_id"], "receipt")
+        self.assertEqual(json.loads(self.ledger.read_text(encoding="utf-8"))["dispatch_id"], "receipt")
 
     def test_usage_reads_home_ledger_and_honors_overrides(self):
-        self.ledger.write_text(json.dumps(dict(dispatch_id="one", agent="codex", ts=NOW)) + "\n")
+        self.ledger.write_text(json.dumps(dict(dispatch_id="one", agent="codex", ts=NOW)) + "\n", encoding="utf-8")
         local_ledger = self.cwd / "ledger.jsonl"
-        local_ledger.write_text(json.dumps(dict(dispatch_id="two", agent="claude", ts=NOW)) + "\n")
+        local_ledger.write_text(json.dumps(dict(dispatch_id="two", agent="claude", ts=NOW)) + "\n", encoding="utf-8")
         result = self.run_cli("usage", "--now", NOW)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["codex_calls"], 1)
@@ -101,12 +105,12 @@ class WrapperTests(unittest.TestCase):
     def test_handoff_preserves_relative_paths(self):
         (self.cwd / "handoff files").mkdir()
         data = "# Example\nID: sample\nRun: run\nTask: task\nDispatch: dispatch\nNext: verify\n"
-        (self.cwd / "source file.md").write_text(data)
+        (self.cwd / "source file.md").write_bytes(data.encode("utf-8"))
         for action in ("publish", "verify"):
             result = self.run_cli("handoff", action, "--dir", "handoff files",
                                   "--file", "source file.md")
             self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.cwd / "handoff files/sample.md").read_text(), data)
+        self.assertEqual((self.cwd / "handoff files/sample.md").read_text(encoding="utf-8"), data)
 
     def test_help_is_passed_through(self):
         expected = subprocess.run([sys.executable, str(ROOT / "conflux.py"), "--help"],
