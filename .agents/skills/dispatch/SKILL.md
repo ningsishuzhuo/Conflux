@@ -4,14 +4,15 @@ description: "Use when dispatching Orca workers, checking the five-hour dispatch
 ---
 
 只在准备派单、查询五小时窗口或交接时加载。按当前 Run 和策略填写参数。
+默认策略为 `~/.config/conflux/policy.json`，默认账本为 `~/.local/state/conflux/ledger.jsonl`。
 
 ```sh
-python3 conflux.py dispatch --policy policy.json --agent codex --profile default \
-  --model "$CODEX_MODEL" --cwd . --ledger "$LEDGER" -- \
+conflux dispatch --agent codex --profile default \
+  --model "$CODEX_MODEL" --cwd . -- \
   --from "$ORCA_SESSION" --spec "执行任务契约并报告实测结果" --worktree current --json
-python3 conflux.py usage --ledger "$LEDGER"
-python3 conflux.py handoff publish --dir "$HANDOFF_DIR" --file handoff.md
-python3 conflux.py handoff verify --dir "$HANDOFF_DIR" --file handoff.md
+conflux usage
+conflux handoff publish --dir "$HANDOFF_DIR" --file handoff.md
+conflux handoff verify --dir "$HANDOFF_DIR" --file handoff.md
 ```
 
 - 禁止绕过策略入口和付费授权。协调者禁止写业务代码，DSH 禁止再派生。

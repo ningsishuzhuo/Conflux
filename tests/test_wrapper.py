@@ -1,0 +1,116 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+NOW = "2026-01-01T12:00:00Z"
+
+
+class WrapperTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.cwd = Path(temporary.name)
+        home = self.cwd / "test home"
+        self.policy = home / ".config/conflux/policy.json"
+        self.ledger = home / ".local/state/conflux/ledger.jsonl"
+        for path in (self.policy, self.ledger):
+            path.parent.mkdir(parents=True)
+        self.env = dict(os.environ, HOME=str(home))
+        for name in ("CONFLUX_POLICY", "CONFLUX_LEDGER"):
+            self.env.pop(name, None)
+
+        self.entry = self.cwd / "conflux"
+        (self.cwd / "relative-link").symlink_to(ROOT / "bin/conflux")
+        self.entry.symlink_to("relative-link")
+        self.policy.write_text((ROOT / "policy.json").read_text())
+        self.local_policy = self.cwd / "policy.json"
+        self.local_policy.write_text(
+            self.policy.read_text().replace('"paid"', '"subscription"')
+        )
+        orca = self.cwd / "fake orca"
+        orca.write_text("#!/usr/bin/env python3\nimport json, sys\n"
+                        "print(json.dumps(dict(dispatchId='receipt', args=sys.argv[1:])))\n")
+        orca.chmod(0o755)
+        self.dispatch = ("dispatch", "--agent", "claude", "--profile", "default",
+                         "--model", "example", "--cwd", ".", "--orca-bin", str(orca),
+                         "--now", NOW)
+
+    def run_cli(self, *args):
+        return subprocess.run([str(self.entry), *map(str, args)], cwd=self.cwd,
+                              env=self.env, capture_output=True, text=True)
+
+    def test_dispatch_rejects_paid_route_using_home_policy(self):
+        result = self.run_cli(*self.dispatch)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("paid route requires --authorize-paid", result.stderr)
+        self.assertFalse(self.ledger.exists())
+        self.assertFalse((self.cwd / "ledger.jsonl").exists())
+
+    def test_dispatch_missing_home_policy_fails_closed(self):
+        self.policy.unlink()
+        result = self.run_cli(*self.dispatch)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cannot load policy", result.stderr)
+        self.assertIn(str(self.policy), result.stderr)
+
+    def test_explicit_policy_and_ledger_override_environment(self):
+        self.env.update(CONFLUX_POLICY=str(self.policy), CONFLUX_LEDGER=str(self.ledger))
+        explicit_ledger = self.cwd / "explicit ledger.jsonl"
+        for options in (
+            ("--policy", self.local_policy, "--ledger", explicit_ledger),
+            (f"--policy={self.local_policy}", f"--ledger={explicit_ledger}"),
+        ):
+            with self.subTest(options=options):
+                result = self.run_cli(*self.dispatch, *options)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(explicit_ledger.read_text())["billing"],
+                                 "subscription")
+                explicit_ledger.unlink()
+        self.assertFalse(self.ledger.exists())
+
+    def test_dispatch_preserves_native_arguments(self):
+        self.env["CONFLUX_POLICY"] = str(self.local_policy)
+        native = ["--spec", "run a task", "--policy", "--ledger=value", ""]
+        result = self.run_cli(*self.dispatch, "--", *native)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["args"],
+                         ["orchestration", "worker-start", "--agent", "claude",
+                          "--model", "example", *native])
+        self.assertEqual(json.loads(self.ledger.read_text())["dispatch_id"], "receipt")
+
+    def test_usage_reads_home_ledger_and_honors_overrides(self):
+        self.ledger.write_text(json.dumps(dict(dispatch_id="one", agent="codex", ts=NOW)) + "\n")
+        local_ledger = self.cwd / "ledger.jsonl"
+        local_ledger.write_text(json.dumps(dict(dispatch_id="two", agent="claude", ts=NOW)) + "\n")
+        result = self.run_cli("usage", "--now", NOW)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["codex_calls"], 1)
+        self.env["CONFLUX_LEDGER"] = str(local_ledger)
+        result = self.run_cli("usage", "--now", NOW)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["other_calls"], 1)
+        result = self.run_cli("usage", f"--ledger={self.ledger}", "--now", NOW)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["codex_calls"], 1)
+
+    def test_handoff_preserves_relative_paths(self):
+        (self.cwd / "handoff files").mkdir()
+        data = "# Example\nID: sample\nRun: run\nTask: task\nDispatch: dispatch\nNext: verify\n"
+        (self.cwd / "source file.md").write_text(data)
+        for action in ("publish", "verify"):
+            result = self.run_cli("handoff", action, "--dir", "handoff files",
+                                  "--file", "source file.md")
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.cwd / "handoff files/sample.md").read_text(), data)
+
+    def test_help_is_passed_through(self):
+        expected = subprocess.run([sys.executable, str(ROOT / "conflux.py"), "--help"],
+                                  cwd=self.cwd, capture_output=True, text=True)
+        result = self.run_cli("--help")
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (expected.returncode, expected.stdout, expected.stderr))

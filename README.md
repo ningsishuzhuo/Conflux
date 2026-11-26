@@ -57,3 +57,25 @@ python3 -m unittest discover -s tests -v
 详见 [CLI 契约](docs/cli-contract.md) 和 [发布与迁移清单](docs/release-checklist.md)。手工 Orca 回归在隔离 Run 中执行。
 
 [MIT License](LICENSE)
+
+### 跨项目调用
+
+在 Conflux 仓库根目录运行以下命令，并确保 `~/.local/bin` 已加入 `PATH`。
+安装前请将仓库内的策略调整为实际模型。以下命令会保留已有的用户级策略。
+
+```sh
+mkdir -p "$HOME/.local/bin" "$HOME/.config/conflux" "$HOME/.local/state/conflux"
+ln -s "$(pwd -P)/bin/conflux" "$HOME/.local/bin/conflux"
+test -e "$HOME/.config/conflux/policy.json" || cp policy.json "$HOME/.config/conflux/policy.json"
+```
+
+在任意项目目录运行。策略和账本默认分别使用
+`~/.config/conflux/policy.json` 和 `~/.local/state/conflux/ledger.jsonl`，
+可用 `CONFLUX_POLICY`、`CONFLUX_LEDGER` 或优先级更高的显式参数覆盖。
+
+```sh
+conflux dispatch --agent codex --profile default --model "$CODEX_MODEL" --cwd . -- \
+  --from "$ORCA_SESSION" --spec "运行单测并报告结果" --worktree current --json
+conflux usage
+conflux handoff verify --dir handoffs --file handoff.md
+```
