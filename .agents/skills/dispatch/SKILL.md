@@ -11,6 +11,9 @@ conflux dispatch --agent codex --profile default \
   --model "$CODEX_MODEL" --cwd . -- \
   --from "$ORCA_SESSION" --spec "执行任务契约并报告实测结果" \
   --worktree current --environment local --json
+conflux dispatch --agent dsh --profile default --model default --cwd . -- \
+  --from "$ORCA_SESSION" --spec "只读并行调研并汇总结果（禁止改文件与再派生）" \
+  --worktree current --environment local --json
 conflux usage
 conflux handoff publish --dir "$HANDOFF_DIR" --file handoff.md
 conflux handoff verify --dir "$HANDOFF_DIR" --file handoff.md
