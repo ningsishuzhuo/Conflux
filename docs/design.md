@@ -11,7 +11,7 @@ Conflux 是 MIT 许可的开源项目，由 Orca 原生执行底座、Python 标
 | Antigravity（Google AI Pro，5 小时滚动限额） | 极轻协调者，负责定契约、重大决策和验收。实现、细节规划与深挖交给执行者。 |
 | Codex（ChatGPT Plus，无 5 小时硬限） | 主力执行者。以完整契约一次委派细节规划、实现、测试、调试与文档起草。 |
 | DSH（低成本） | 纯只读调研、确定性验收跑腿和小范围机械改动直接路由，无需事前核算净收益。仅一次机会，含糊或失败转 Codex；机械改动须附 `git status`，工作区脏时转 Codex。叶节点禁止再派生。默认不保留终端，按需显式透传 Orca 原生 `--keep-open`，无需专用适配器。 |
-| Claude Code（额外按需付费） | 默认拒绝。仅接受绑定本次派单的显式付费授权，用于定点 Review 或重大裁决。 |
+| Claude Code（额外按需付费） | 默认拒绝。本轮明确点名且意图清晰即授权本次付费派单，仍须记账。AGY 主动提议或表意模糊时经 gate 确认。 |
 
 UTC 滚动窗口为 `now − 5h < ts ≤ now`。只计首次取得唯一 `dispatchId` 的成功派单，失败、取消和结果未知均不计。DSH 与 Claude 仅记审计，均不进入 `AGY:Codex` 分子或分母。拟派 Antigravity Worker 时，若 `Codex_calls == 0` 则拒绝，否则加入候选后须满足 `2 × AGY_calls < Codex_calls`。该比例是 Conflux 派单代理指标。服务商配额与 Codex JSONL token 旁证分别展示。
 
@@ -31,7 +31,7 @@ UTC 滚动窗口为 `now − 5h < ts ≤ now`。只计首次取得唯一 `dispat
 - Claude Code 使用原生工具权限与工作区隔离，弃用旧启发式 Guard。Antigravity、SSH 和 WSL 的协调约束按软约束处理，执行端通过工作区权限或只读挂载回退。
 - 付费准入和配比在薄 CLI 内执行。Orca 插件启动调用点传入空 env，恢复会话及绕过入口启动也超出 CLI 准入覆盖。
 
-根 `AGENTS.md` 只放角色、权限、派单条件与技能索引。技能按 Superpowers / OpenHands microagents 风格，仅写触发条件、步骤与验收。Codex 从 `.agents/skills/` 发现，Claude 和 Gemini 通过薄入口读取共用规则并按明确路径读同一份技能。Antigravity 派单显式给路径。
+根 `AGENTS.md` 只放角色、权限、派单条件与技能索引。热层保留命令或通用流程，按动作加载 autonomy 冷层中的验收清单和异常规则。Codex 从 `.agents/skills/` 发现，Claude 和 Gemini 通过薄入口读取共用规则并按明确路径读同一份技能。Antigravity 派单显式给路径。
 
 ## 垂直切片
 

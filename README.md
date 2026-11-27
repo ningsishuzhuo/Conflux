@@ -67,7 +67,7 @@ conflux usage
 | --- | --- | --- |
 | Codex | 主力执行 | 成功派单计入配比 |
 | DSH（DeepSeek Harness） | 只读调研、确定性验收、小范围机械改动默认路由 | 仅一次机会，含糊或失败转 Codex；机械改动须附 `git status`，工作区脏时转 Codex。禁止再派生；默认关闭终端保留，按需显式传 `--keep-open` |
-| Claude Code | 定点审查或重大裁决 | 每次付费派单需明确授权 |
+| Claude Code | 定点审查或重大裁决 | 本轮明确点名 `Claude`、`Claude Code` 或 `cc` 且意图清晰时，视为本次付费授权，免二次确认 |
 | Antigravity（AGY） | 轻量协调与验收 | 受下述配比限制 |
 
 派发 Antigravity 前，近 5 小时 Antigravity 成功次数的 2 倍必须小于 Codex 成功次数；检查时还会把这次准备派发的 Antigravity 算进去，即 `2 × (AGY + 1) < Codex`。这是针对滚动限额的内置规则，不用 `antigravity` 路由不受影响；需要其他配比可以提 Issue 或 fork。
@@ -75,12 +75,7 @@ conflux usage
 ## 两个按需技能
 
 - [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)（单次派单、查询与交接）：平时需要单次派单时加载。它按需调用下方 `conflux` CLI 的 `dispatch`、`usage`、`handoff`，检查派单策略、查询最近 5 小时用量、发布和核验 6 行交接。验收时核对 Task ID、Dispatch ID 和真实输出，拒绝把启动时的 `idle` 或旧终态误当成完成。
-- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`，整个过程分四步：
-
-  1. **预检与契约冻结**：先读派单技能、Orca 编排指南和本地策略，再查 `conflux usage`。冻结前只做预检。确认任务 DAG、worktree、由协调者持有并核对的验收命令及操作红线。
-  2. **分工与审批**：AGY 协调、决策和验收，DSH 做只读调研、确定性验收与小范围机械改动，Codex 负责实现和修复。Claude 默认拒绝，仅高危架构、安全终审或 Codex 熔断兜底经 `gate` 逐次人工审批。批准后内联 DSH 摘要，标明审阅对象，禁业务 shell 与扫仓，仅放行 `worker_done`。
-  3. **派单与止损**：用 `--worktree path:<child-dir>` 指向已有子工作树。轻量 Claude/DSH 在 90 秒检查一次，Codex 在 5 分钟检查一次。收到回执取消检查，遇 409/429 立即停止 worker。Claude 限流时，审查转独立 Codex 交叉审查与 AGY 裁决，常规验收交 DSH + AGY，Codex 熔断救场或不可用时用 `gate` 叫人。
-  4. **验收与交接**：验收后用 `worker-release` 关闭一次性终端，保留工作树。里程碑验收后由执行者本地提交，协调者发布并核验 6 行 handoff，给出绝对路径及可复制的续跑指令。里程碑完成或 `max_turn_context_tokens >= 80000` 时提醒 `/compact` 或新开会话。
+- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`。方案打磨期只做授权的只读调研或评审。用户明确开工后冻结任务 DAG、工作区、验收标准、安全红线和 Claude 授权策略。派单后由 Orca 原生消息唤醒，禁止定时看门狗和阻塞轮询。实施、验收和异常处理前，按技能中的强动作门加载对应冷层。
 
 需求对齐后，可以直接对主控 AI 说：「按 `conflux-autonomy` 冻结契约并自动推进到底」。
 

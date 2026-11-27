@@ -23,7 +23,7 @@ class InstallTests(unittest.TestCase):
 
     def run_install(self, *args):
         return subprocess.run([str(ROOT / "install.sh"), "--skip-orca-check", *args],
-                              env=self.env, text=True, capture_output=True)
+                              cwd=self.temp.name, env=self.env, text=True, capture_output=True)
 
     def test_install_and_repeat_preserves_policy(self):
         self.assertEqual(self.run_install().returncode, 0)
@@ -35,6 +35,26 @@ class InstallTests(unittest.TestCase):
         self.assertEqual((self.home / '.local/bin/conflux').resolve(), ROOT / 'bin/conflux')
         self.assertEqual((self.home / '.agents/skills/conflux-dispatch').resolve(), ROOT / '.agents/skills/dispatch')
         self.assertEqual((self.home / '.agents/skills/conflux-autonomy').resolve(), ROOT / '.agents/skills/autonomy')
+
+    def test_upgrade_existing_skill_links_exposes_complete_directories(self):
+        skills = self.home / ".agents/skills"
+        skills.mkdir(parents=True)
+        for name in ("dispatch", "autonomy"):
+            source = ROOT / ".agents/skills" / name
+            (skills / f"conflux-{name}").symlink_to(source, target_is_directory=True)
+
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name, files in (
+            ("dispatch", ("SKILL.md",)),
+            ("autonomy", ("SKILL.md", "references/edge-cases.md",
+                          "references/review-checklists.md")),
+        ):
+            for relative in files:
+                with self.subTest(skill=name, file=relative):
+                    source = ROOT / ".agents/skills" / name / relative
+                    installed = skills / f"conflux-{name}" / relative
+                    self.assertEqual(installed.read_bytes(), source.read_bytes())
 
     def test_dry_run_writes_nothing(self):
         self.assertEqual(self.run_install('--dry-run').returncode, 0)

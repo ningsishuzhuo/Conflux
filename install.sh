@@ -39,6 +39,7 @@ else
     (set -C; sed 's/"example"/"default"/g' "$root/policy.json" > "$policy")
   fi
   [ -L "$command_link" ] || ln -s "$root/bin/conflux" "$command_link"
+  # Link whole directories so existing installs pick up new references on upgrade.
   [ -L "$skill_link" ] || ln -s "$root/.agents/skills/dispatch" "$skill_link"
   [ -L "$autonomy_link" ] || ln -s "$root/.agents/skills/autonomy" "$autonomy_link"
   echo '安装完成。'

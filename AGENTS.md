@@ -1,29 +1,22 @@
-# Conflux 协作规则
+**AGY 全局反越权红线（不分冻结前后）**：仅调用协调工具（`conflux`、`orca`、读规则、Skill、handoff、report）。凡联网检索、扫仓、读 ≥2 业务文件或跑业务命令（含单步），首步一律派 DSH。
 
-| 角色 | 派单原则 |
-| --- | --- |
-| Antigravity | 极轻协调，受 5 小时滚动限额约束。负责定契约、重大决策、验收。 |
-| Codex | 主力执行。一次交付完整契约，涵盖细节规划、实现、调试、测试和证据。 |
-| DSH | 以下三类直接路由，无需事前核算净收益：① 纯只读调研（拉外部仓库、查文档、扫代码库结构）；② 确定性验收跑腿（跑冻结测试、lint、构建，只吐结构化事实）；③ 小范围机械改动（文档、配置、机械替换、按现有模式补独立单测）。仅给 1 次机会，含糊或首次翻车直接转 Codex；③ 须附 `git status`，脏工作区交 Codex。需保留终端时显式传 `--keep-open`；叶节点禁止再派生。 |
-| Claude Code | 默认拒绝。定点审查或重大裁决需要绑定本次派单的显式付费授权。 |
+## 两阶段
+- 方案打磨期仅派 DSH 只读调研或由用户点名做只读评审。禁催冻结，禁任何改动。
+- 用户明确敲定或要求开干后进入冻结执行期。协调者定契约、做决策和验收，执行者在授权范围内交付。
 
-Antigravity 派单带账本，按 UTC 最近 5 小时去重统计成功回执。加入候选后须满足 `2 × AGY_calls < Codex_calls`。DSH 和 Claude 只记审计。派单次数是代理指标，服务商配额另查。
+## 单层调度
+- AGY：极轻协调（5h 限额），单步协调状态可自查。扁平派单，worker 禁止再派生。
+- DSH：可自证的只读调研、查 Skill、冻结验收跑腿，以及冻结后的干净工作区机械改动（附 `git status`）。只给一次机会，缺实测证据、漏项或报无法完成即失败，直转 Codex。
+- Codex：主力执行，负责语义设计、多文件改造、文案/PPT 与科研生产。
+- Claude 默认拒绝。用户本轮明确点名 `Claude`、`Claude Code` 或 `cc` 且意图清晰，视为本次显式付费授权，免二次确认，仍用 `conflux dispatch --authorize-paid` 记账。AGY 主动提议或表意模糊时经 gate 确认。
+- 按 UTC 最近 5 小时去重统计成功派单回执，加入候选后须满足 `2 × AGY_calls < Codex_calls`。DSH 和 Claude 只记审计，服务商配额另查。
 
-## 协调者写保护
-
-- Codex 用 `-s read-only -a never`，执行者使用独立可写工作区。
-- Gemini CLI 保留 Orca hook，追加独立 `BeforeTool` 拒绝条目。对 shell 等其他写入面使用工作区权限。
-- Claude Code 使用原生工具权限和工作区隔离。
-- Antigravity、SSH、WSL 在未确认同步拒绝时按软约束处理。能隔离时用文件权限或只读挂载，把写入交给可写执行者。
-
-| 常见借口 | 现实 |
-| --- | --- |
-| 协调者顺手改几行更快 | 协调权限只覆盖定契约和验收，改动交给执行者。 |
-| 看过差异就可以报完成 | 先取得实际验证输出，再核对 Orca 终态。缺证据就报告未验证。 |
-| DSH 免费就反复重试或交给它语义裁决 | DSH 只接结果可自证的任务，仅给 1 次机会；失败或需语义判断直接转 Codex，避免消耗主控限额。 |
+## 写保护
+1. 硬隔离：Codex `-s read-only -a never`，或使用只读权限、只读挂载。执行者使用独立可写工作区。
+2. 辅助检测：Gemini 保留 Orca hook，追加 `BeforeTool` 写工具拦截及 shell 文本提示。间接写须靠工作区权限兜底。
+3. 软约束：AGY、SSH、WSL 按软约束处理，能隔离时优先硬隔离。
 
 ## 按需入口
-
-- 派单、查询和交接时读 `.agents/skills/dispatch/SKILL.md`。
-- 需求确定后无人值守推进项目时读 `.agents/skills/autonomy/SKILL.md`。
-- Run、Task、Worker 生命周期及恢复见 Orca 原生 `orchestration` 指南。
+- 派单、查询、交接读 `.agents/skills/dispatch/SKILL.md`。
+- 自主推进读 `.agents/skills/autonomy/SKILL.md`，按动作加载其冷层。
+- Run、Task、Worker 生命周期和恢复见 Orca 原生 `orchestration` 指南。

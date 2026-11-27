@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat >/dev/null; printf '%s\\n' '{\"decision\":\"deny\",\"reason\":\"read-only\"}'"
+            "command": "# Auxiliary write-tool guard. Workspace permissions must block indirect shell writes.\ncat >/dev/null; printf '%s\\n' '{\"decision\":\"deny\",\"reason\":\"read-only\"}'"
           }
         ]
       }
