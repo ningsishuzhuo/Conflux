@@ -4,7 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_PATHS = (
-    "conflux.py", "conflux_handoff.py", "conflux_spend.py", "spend.json", "install.sh", "bin/conflux", "policy.json", "README.md", "LICENSE",
+    "conflux.py", "conflux_handoff.py", "install.sh", "bin/conflux", "policy.json", "README.md", "LICENSE",
     "bin/conflux.cmd", ".github/workflows/test.yml",
     "AGENTS.md", "CLAUDE.md", "GEMINI.md", ".agents", "examples",
     "docs/design.md", "docs/cli-contract.md", "docs/release-checklist.md",
@@ -36,7 +36,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn(clause, license_text)
 
     def test_production_line_limits(self):
-        for name, limit in (("conflux.py", 200), ("conflux_handoff.py", 70), ("conflux_spend.py", 120)):
+        for name, limit in (("conflux.py", 200), ("conflux_handoff.py", 70)):
             with self.subTest(name=name):
                 lines = (ROOT / name).read_text(encoding="utf-8").splitlines()
                 self.assertLessEqual(sum(

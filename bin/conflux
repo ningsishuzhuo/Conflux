@@ -18,12 +18,10 @@ case "${1-}" in
         options=()
         policy_set=false
         ledger_set=false
-        spend_set=false
         while [[ $# -gt 0 && $1 != -- ]]; do
             case "$1" in
                 --policy|--policy=*) policy_set=true ;;
                 --ledger|--ledger=*) ledger_set=true ;;
-                --spend-config|--spend-config=*) spend_set=true ;;
             esac
             options+=("$1")
             shift
@@ -33,10 +31,6 @@ case "${1-}" in
         fi
         if [[ "$ledger_set" == false ]]; then
             options+=(--ledger "${CONFLUX_LEDGER:-$HOME/.local/state/conflux/ledger.jsonl}")
-        fi
-        spend_path=${CONFLUX_SPEND:-$HOME/.config/conflux/spend.json}
-        if [[ "$spend_set" == false && -f "$spend_path" ]]; then
-            options+=(--spend-config "$spend_path")
         fi
         set -- "$command" "${options[@]}" "$@"
         ;;

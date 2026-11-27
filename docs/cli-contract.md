@@ -50,5 +50,3 @@ Next: <Next>
 ```
 
 ID 必须完全匹配 `^[A-Za-z0-9._-]+$`且不能为 `.` 或 `..`。目标为 `<dir>/<ID>.md`，以同目录原子发布并按字节核验内容。发布结果为 `0`（created）、`10`（duplicate）、`11`（conflict）、`2`（invalid）。核验返回 `0` 表示匹配，`11` 表示内容冲突，`2` 表示输入无效或文件缺失。
-
-`dispatch` 和 `usage` 支持 `--spend-config` 与 `--claude-projects`。配置启用时，`usage` 输出 `claude_spend`，付费 dispatch 在定价失败或达到窗口上限时拒绝。包装器自动使用本机配置（若存在）。

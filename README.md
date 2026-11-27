@@ -151,5 +151,3 @@ python -m unittest discover -s tests -v
 ## 许可
 
 [MIT License](LICENSE) · [Issue](https://github.com/ningsishuzhuo/Conflux/issues)
-
-可选的 `spend.json` 可为付费路由启用本地 Claude 滚动花费粗护栏；`usage` 将附带 `claude_spend`。价格与日志仅为估算，参见 `docs/adr/0005-local-claude-spend-guard.md`。
