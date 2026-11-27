@@ -1,4 +1,4 @@
-# Conflux v0.3.0
+# Conflux v0.3.1
 
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -77,6 +77,10 @@ conflux usage
 - [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)（单次派单、查询与交接）：平时需要单次派单时加载。它按需调用下方 `conflux` CLI 的 `dispatch`、`usage`、`handoff`，检查派单策略、查询最近 5 小时用量、发布和核验 6 行交接。验收时核对 Task ID、Dispatch ID 和真实输出，拒绝把启动时的 `idle` 或旧终态误当成完成。
 - [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`。方案打磨期只做授权的只读调研或评审，适用于代码开发、文案与 PPT、科研协作。用户明确开工后冻结任务 DAG、工作区、验收标准、安全红线和 Claude 授权策略。派单后由 Orca 原生消息唤醒，禁止定时看门狗和阻塞轮询。两个 Skill 的热入口各由单测限制在 28 行以内，按动作加载冷层。实施者先自检，协调者按实测证据验收。硬伤按稳定失败指纹打回，失败集合严格缩小且无新增失败才继续换人复修。软伤只清理一次，按原标准复验，失败时确认无并发修改后回退本次清理。
 
+- 用户明示冻结前，协调者保持零状态改动（含 `git fetch/pull/switch`）。AGY 在业务仓库外的协调 scratch 目录协作，禁止跨工作区读取无关文件或翻查外部工具源码。遇到 Skill 和 CLI `--help` 未覆盖的报错，停机并报告原命令与报错。
+- 冻结草案须为 `git push`、PR/Issue（含 `Refs`/`Closes`）和发版等外部写操作写明唯一默认值与执行归属。未决项须由用户拍板，执行前二次确认。已冻结的默认值仅在参数或目标变化时重批。
+- 代码、文案、PPT 和科研的冻结契约均须写明“独立语义审查：安排（由谁）/ 不安排（原因）”。DSH 客观初筛不可替代独立语义审查。收尾及发布交接前，核对审查已完成或已记录不安排的原因。
+
 需求对齐后，可以直接对主控 AI 说：「按 `conflux-autonomy` 冻结契约并自动推进到底」。
 
 ## CLI 命令参考
@@ -93,7 +97,9 @@ conflux usage
 
 ### `handoff`
 
-换客户端接力时，`handoff` 把任务状态写成 6 行文件，防止重复发布或覆盖已有内容。创建 UTF-8 文件 `handoff.md`，每行使用 LF，并以换行结尾：
+里程碑验收通过、`max_turn_context_tokens >= 80000` 或同一问题连续 2 次无收敛时，发布并核验 6 行 handoff，必要时在同一目录附只读摘要，再切到新会话按 `Next` 续跑。
+
+`conflux handoff --help` 提供格式说明。格式报错会区分 CRLF、行数、字段前缀错误或空值，并附 6 行模板。创建 UTF-8 文件 `handoff.md`，每行使用 LF，并以换行结尾：
 
 ```markdown
 # 接手测试

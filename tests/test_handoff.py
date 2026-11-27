@@ -12,6 +12,11 @@ NOTE = "# 交接\nID: case-1\nRun: r\nTask: t\nDispatch: d\nNext: n\n".encode()
 OTHER = NOTE.replace(b"Next: n", b"Next: other")
 
 
+HANDOFF_TEMPLATE = (
+    b"# <Title>\nID: <id>\nRun: <run>\nTask: <task>\nDispatch: <dispatch>\nNext: <next>\n"
+)
+
+
 class HandoffTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -85,3 +90,36 @@ class HandoffTests(unittest.TestCase):
         for data, result in zip(inputs, results):
             self.assertEqual(result, (0 if result == 0 else 10) if data == winner else 11)
         self.assertEqual(list(self.directory.iterdir()), [self.final])
+
+    def test_invalid_input_diagnostics(self):
+        cases = (
+            (NOTE.replace(b"\n", b"\r\n"), b"CRLF"),
+            (NOTE.split(b"Next:")[0], b"got 5"),
+            (NOTE + b"extra\n", b"got 7"),
+            (NOTE[:-1], b"without a final LF"),
+            (NOTE.replace(b"Run: r", b"Route: r"), b"line 3: expected field prefix"),
+            (NOTE.replace(b"Next: n", b"Next:  "), b"line 6: empty value"),
+        )
+        for action in ("publish", "verify"):
+            for data, reason in cases:
+                with self.subTest(action=action, reason=reason):
+                    result = subprocess.run(
+                        [sys.executable, str(CLI), "handoff", action, "--dir",
+                         str(self.directory), "--file", "-"],
+                        input=data, capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn(reason, result.stderr)
+                    self.assertIn(HANDOFF_TEMPLATE, result.stderr)
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_help_describes_format(self):
+        for action in ([], ["publish"], ["verify"]):
+            with self.subTest(action=action):
+                result = subprocess.run(
+                    [sys.executable, str(CLI), "handoff", *action, "--help"],
+                    capture_output=True,
+                )
+                self.assertEqual(result.returncode, 0)
+                self.assertIn(b"ending in LF", result.stdout)
+                self.assertIn(HANDOFF_TEMPLATE, result.stdout)

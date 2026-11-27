@@ -36,7 +36,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn(clause, license_text)
 
     def test_production_line_limits(self):
-        for name, limit in (("conflux.py", 200), ("conflux_handoff.py", 70), ("conflux_usage.py", 150)):
+        for name, limit in (("conflux.py", 200), ("conflux_handoff.py", 90), ("conflux_usage.py", 150)):
             with self.subTest(name=name):
                 lines = (ROOT / name).read_text(encoding="utf-8").splitlines()
                 self.assertLessEqual(sum(

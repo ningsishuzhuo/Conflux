@@ -29,20 +29,33 @@ def exclusive_lock(path):
                 msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
 
 
-def destination(directory, data):
-    fields = re.fullmatch(
-        r"# ([^\r\n]+)\nID: ([A-Za-z0-9._-]+)\nRun: ([^\r\n]+)\n"
-        r"Task: ([^\r\n]+)\nDispatch: ([^\r\n]+)\nNext: ([^\r\n]+)\n",
-        data.decode("utf-8"),
-    )
-    if not fields or not all(value.strip() for value in fields.groups()):
-        raise ValueError("expected six nonempty LF-terminated handoff fields")
-    key = fields[2]
-    directory = directory.resolve(strict=True)
-    final = directory / (key + ".md")
-    if key in (".", "..") or not directory.is_dir() or final.resolve().parent != directory:
-        raise ValueError("invalid handoff directory or destination")
-    return final
+HANDOFF_FORMAT = """Expected six nonempty UTF-8 handoff lines, each ending in LF:
+# <Title>
+ID: <id>
+Run: <run>
+Task: <task>
+Dispatch: <dispatch>
+Next: <next>"""
+
+
+def handoff_id(content):
+    if "\r" in content:
+        raise ValueError("CRLF or bare CR is invalid; use LF line endings")
+    if content and not content.endswith("\n"):
+        raise ValueError("handoff ends without a final LF")
+    lines = content.split("\n")[:-1]
+    if len(lines) != 6:
+        raise ValueError(f"expected six lines; got {len(lines)}")
+    for number, (line, template) in enumerate(zip(lines, HANDOFF_FORMAT.split("\n")[1:]), 1):
+        prefix = template.partition("<")[0]
+        if not line.startswith(prefix):
+            raise ValueError(f"line {number}: expected field prefix {prefix!r}")
+        if not line[len(prefix):].strip():
+            raise ValueError(f"line {number}: empty value for {prefix.strip()}")
+    key = lines[1].removeprefix("ID: ")
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", key) or key in (".", ".."):
+        raise ValueError("invalid ID: use letters, digits, '.', '_' or '-'; '.' and '..' are reserved")
+    return key
 
 
 def publish(final, data):
@@ -63,16 +76,24 @@ def publish(final, data):
 
 
 def handoff(argv):
-    parser = argparse.ArgumentParser(prog="conflux.py handoff", allow_abbrev=False)
+    parser = argparse.ArgumentParser(
+        prog="conflux.py handoff", allow_abbrev=False, epilog=HANDOFF_FORMAT,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", choices=("publish", "verify"))
     parser.add_argument("--dir", required=True, type=Path)
     parser.add_argument("--file", required=True)
     args = parser.parse_args(argv)
     try:
         data = sys.stdin.buffer.read() if args.file == "-" else Path(args.file).read_bytes()
-        final = destination(args.dir, data)
+        key = handoff_id(data.decode("utf-8"))
+        directory = args.dir.resolve(strict=True)
+        final = directory / (key + ".md")
+        if not directory.is_dir() or final.resolve().parent != directory:
+            raise OSError("invalid handoff directory or destination")
         if args.action == "publish":
             return publish(final, data)
         return 0 if final.read_bytes() == data else 11
-    except (OSError, ValueError, RuntimeError) as error:
+    except ValueError as error:
+        parser.error(f"{error}\n{HANDOFF_FORMAT}")
+    except (OSError, RuntimeError) as error:
         parser.error(str(error))

@@ -15,7 +15,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "# Auxiliary write-tool guard. Workspace permissions must block indirect shell writes.\ncat >/dev/null; printf '%s\\n' '{\"decision\":\"deny\",\"reason\":\"read-only\"}'"
+            "command": "# Auxiliary example only. install.sh does not install this hook automatically. Read-only isolation is required to block indirect writes.\ncat >/dev/null; printf '%s\\n' '{\"decision\":\"deny\",\"reason\":\"read-only\"}'"
+          }
+        ]
+      },
+      {
+        "matcher": "^(run_shell_command|read_file|read_many_files)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null; printf '%s\\n' '{\"systemMessage\":\"Check the frozen contract before git fetch/pull/switch, git push or gh pr. Do not read external tool source across workspace boundaries. This is an auxiliary reminder; read-only isolation enforces the boundary.\"}'"
           }
         ]
       }

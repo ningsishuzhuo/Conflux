@@ -48,6 +48,13 @@ class ClientRulesTests(unittest.TestCase):
                      "dispatchId", "messageId", "worker_done", "gate-create"):
             self.assertIn(term, content)
 
+        self.assertRegex(content, r"(?m)^1\. .*代码、文案、PPT、科研.*显式写明"
+                                  r"“独立语义审查：安排（由谁）/ 不安排（原因）”")
+        self.assertRegex(content, r"(?m)^3\. .*DSH 客观初筛.*冻结契约约定的独立语义审查"
+                                  r".*审写分离.*DSH 初筛不可替代独立语义审查")
+        self.assertRegex(content, r"(?m)^6\. .*收尾和发布 handoff 前核对"
+                                  r"独立语义审查已按冻结契约完成或已记录不安排原因")
+
     def test_global_boundaries_have_one_source(self):
         content = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         for term in ("不分冻结前后", "联网检索", "≥2", "跑业务命令", "首步一律派 DSH"):
@@ -72,3 +79,37 @@ class ClientRulesTests(unittest.TestCase):
                     '{"decision":"deny","reason":"read-only"}' in hook["command"]
                     for hook in entry["hooks"])]
         self.assertTrue(orca and deny and orca[0] < deny[0])
+
+    def test_frozen_execution_boundaries(self):
+        contracts = {
+            "AGENTS.md": (
+                "policy", "CLI `--help`", "scratch", "禁止跨工作区读取无关文件",
+                "外部工具源码", "未覆盖报错即停机报告", "四项契约无悬空项",
+                "用户明示拍板", "按你的下一步来做", "/conflux-autonomy",
+                "零状态改动", "git fetch/pull/switch", "自查业务源码",
+                "git push", "PR/Issue", "Refs", "Closes", "发版",
+                "唯一默认值与执行归属", "执行前必二次确认", "参数或目标变化时重批",
+            ),
+            ".agents/skills/autonomy/SKILL.md": (
+                "零状态改动", "git fetch/pull/switch", "仍先出草案",
+                "外部工具未覆盖报错", "外部写未决项", "冻结契约内已拍板的收尾动作",
+            ),
+            SKILL: (
+                '--from "$ORCA_SESSION"', "非空", "聊天会话省略", "--spec-file",
+                "会话 scratch 或临时目录", "禁写入未冻结的业务仓库", "阶段、权限边界",
+                "# <Title>", "ID: <id>", "Run: <run>", "Task: <task>",
+                "Dispatch: <dispatch>", "Next: <next>",
+            ),
+            ".agents/skills/autonomy/references/edge-cases.md": (
+                "原样报告命令与报错", "禁止跨工作区翻源码", "执行前必二次确认",
+                "里程碑切新会话交接", "max_turn_context_tokens >= 80000",
+                "同一问题连续 2 次无收敛", "发布并核验 6 行 handoff",
+                "<id>-notes.md", "确认可读", "可复制的新会话续跑首句",
+            ),
+        }
+        for name, terms in contracts.items():
+            content = (ROOT / name).read_text(encoding="utf-8")
+            for term in terms:
+                with self.subTest(name=name, term=term):
+                    self.assertIn(term, content)
+        self.assertNotIn("/compact", content)

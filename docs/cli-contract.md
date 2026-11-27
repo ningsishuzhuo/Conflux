@@ -46,11 +46,13 @@ python3 conflux.py usage --ledger <path> [--codex-jsonl <path> ...] [--agy-brain
 
 ```markdown
 # <Title>
-ID: <ID>
-Run: <Run>
-Task: <Task>
-Dispatch: <Dispatch>
-Next: <Next>
+ID: <id>
+Run: <run>
+Task: <task>
+Dispatch: <dispatch>
+Next: <next>
 ```
 
 ID 必须完全匹配 `^[A-Za-z0-9._-]+$`且不能为 `.` 或 `..`。目标为 `<dir>/<ID>.md`，以同目录原子发布并按字节核验内容。发布结果为 `0`（created）、`10`（duplicate）、`11`（conflict）、`2`（invalid）。核验返回 `0` 表示匹配，`11` 表示内容冲突，`2` 表示输入无效或文件缺失。
+
+内容校验失败时，退出码为 `2`，stderr 给出具体原因（如 CRLF、缺少末尾 LF、行数不符、字段前缀错误或空值）及上述六行模板。`handoff --help`、`handoff publish --help` 和 `handoff verify --help` 均展示六行 LF 格式。
