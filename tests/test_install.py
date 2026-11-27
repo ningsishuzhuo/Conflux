@@ -34,13 +34,14 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(policy.read_text(), 'custom policy')
         self.assertEqual((self.home / '.local/bin/conflux').resolve(), ROOT / 'bin/conflux')
         self.assertEqual((self.home / '.agents/skills/conflux-dispatch').resolve(), ROOT / '.agents/skills/dispatch')
+        self.assertEqual((self.home / '.agents/skills/conflux-autonomy').resolve(), ROOT / '.agents/skills/autonomy')
 
     def test_dry_run_writes_nothing(self):
         self.assertEqual(self.run_install('--dry-run').returncode, 0)
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_conflicts_are_preserved(self):
-        for relative in ('.local/bin/conflux', '.agents/skills/conflux-dispatch'):
+        for relative in ('.local/bin/conflux', '.agents/skills/conflux-dispatch', '.agents/skills/conflux-autonomy'):
             for kind in ('file', 'link'):
                 with self.subTest(relative=relative, kind=kind), tempfile.TemporaryDirectory() as tmp:
                     self.env['HOME'] = tmp

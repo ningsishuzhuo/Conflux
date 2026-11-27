@@ -10,7 +10,7 @@ Conflux 是 MIT 许可的开源项目，由 Orca 原生执行底座、Python 标
 | --- | --- |
 | Antigravity（Google AI Pro，5 小时滚动限额） | 极轻协调者，负责定契约、重大决策和验收。实现、细节规划与深挖交给执行者。 |
 | Codex（ChatGPT Plus，无 5 小时硬限） | 主力执行者。以完整契约一次委派细节规划、实现、测试、调试与文档起草。 |
-| DSH（低成本） | 仅承接独立、低风险且有净收益的并行辅助。作为叶节点禁止再派生。需保留可见终端时透传 Orca 原生 `--keep-open`，无需专用适配器。 |
+| DSH（低成本） | 纯只读调研、确定性验收跑腿和小范围机械改动直接路由，无需事前核算净收益。仅一次机会，含糊或失败转 Codex；机械改动须附 `git status`，工作区脏时转 Codex。叶节点禁止再派生。默认不保留终端，按需显式透传 Orca 原生 `--keep-open`，无需专用适配器。 |
 | Claude Code（额外按需付费） | 默认拒绝。仅接受绑定本次派单的显式付费授权，用于定点 Review 或重大裁决。 |
 
 UTC 滚动窗口为 `now − 5h < ts ≤ now`。只计首次取得唯一 `dispatchId` 的成功派单，失败、取消和结果未知均不计。DSH 与 Claude 仅记审计，均不进入 `AGY:Codex` 分子或分母。拟派 Antigravity Worker 时，若 `Codex_calls == 0` 则拒绝，否则加入候选后须满足 `2 × AGY_calls < Codex_calls`。该比例是 Conflux 派单代理指标。服务商配额与 Codex JSONL token 旁证分别展示。

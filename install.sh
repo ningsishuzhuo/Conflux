@@ -26,8 +26,10 @@ check_link() {
 }
 command_link="$HOME/.local/bin/conflux"
 skill_link="$HOME/.agents/skills/conflux-dispatch"
+autonomy_link="$HOME/.agents/skills/conflux-autonomy"
 check_link "$command_link" "$root/bin/conflux"
 check_link "$skill_link" "$root/.agents/skills/dispatch"
+check_link "$autonomy_link" "$root/.agents/skills/autonomy"
 if $dry_run; then
   echo '试运行：检查通过，不写入文件。'
 else
@@ -38,6 +40,7 @@ else
   fi
   [ -L "$command_link" ] || ln -s "$root/bin/conflux" "$command_link"
   [ -L "$skill_link" ] || ln -s "$root/.agents/skills/dispatch" "$skill_link"
+  [ -L "$autonomy_link" ] || ln -s "$root/.agents/skills/autonomy" "$autonomy_link"
   echo '安装完成。'
 fi
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo 'export PATH="$HOME/.local/bin:$PATH"' ;; esac

@@ -9,7 +9,7 @@ SKILL = ".agents/skills/dispatch/SKILL.md"
 
 class ClientRulesTests(unittest.TestCase):
     def test_entry_points_share_rules_and_skill(self):
-        for name, limit in (("AGENTS.md", 50), ("CLAUDE.md", 12), ("GEMINI.md", 12)):
+        for name, limit in (("AGENTS.md", 30), ("CLAUDE.md", 12), ("GEMINI.md", 12)):
             with self.subTest(name=name):
                 path = ROOT / name
                 self.assertTrue(path.is_file(), name)
@@ -30,6 +30,16 @@ class ClientRulesTests(unittest.TestCase):
         self.assertIsNotNone(header)
         self.assertRegex(header[1], r"(?m)^name: conflux-dispatch$")
         self.assertRegex(header[1], r'(?m)^description: "Use when [^"\n]+"$')
+
+    def test_autonomy_skill_entry_and_contract(self):
+        path = ".agents/skills/autonomy/SKILL.md"
+        self.assertIn(path, (ROOT / "AGENTS.md").read_text(encoding="utf-8"))
+        content = (ROOT / path).read_text(encoding="utf-8")
+        self.assertLessEqual(len(content.splitlines()), 40)
+        self.assertRegex(content, r"(?m)^name: conflux-autonomy$")
+        for term in ("worktree", "验收命令", "篡改", "git push", "付费授权",
+                     "DSH", "Codex", "orchestration", "gate", "handoff publish/verify"):
+            self.assertIn(term, content)
 
     def test_gemini_keeps_orca_hook_and_appends_deny_hook(self):
         path = ROOT / "examples/gemini-before-tool.json"

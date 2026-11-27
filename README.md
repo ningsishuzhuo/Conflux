@@ -19,7 +19,7 @@ git clone https://github.com/ningsishuzhuo/Conflux.git && cd Conflux
 ./install.sh
 ```
 
-安装脚本将仓库示例策略中的 `"example"` 换成 `"default"`，写入 `~/.config/conflux/policy.json`；已有策略不会覆盖。它还会创建账本目录 `~/.local/state/conflux/`，以及指向本仓库的两个软链：`~/.local/bin/conflux` 和 `~/.agents/skills/conflux-dispatch`。移动或删除仓库后软链会失效；卸载时删除这两个软链即可。若软链位置已有其他文件，脚本会停止。
+安装脚本将仓库示例策略中的 `"example"` 换成 `"default"`，写入 `~/.config/conflux/policy.json`；已有策略不会覆盖。它还会创建账本目录 `~/.local/state/conflux/`，以及指向本仓库的三个软链：`~/.local/bin/conflux`、`~/.agents/skills/conflux-dispatch` 和 `~/.agents/skills/conflux-autonomy`。移动或删除仓库后软链会失效；卸载时删除这三个软链即可。若软链位置已有其他文件，脚本会停止。
 
 如果 `~/.local/bin` 不在 PATH 中，将下面一行写入 `~/.zshrc` 或 `~/.bashrc`，然后重开终端：
 
@@ -66,7 +66,7 @@ conflux usage
 | 角色 | 用途 | 约束 |
 | --- | --- | --- |
 | Codex | 主力执行 | 成功派单计入配比 |
-| DSH（DeepSeek Harness） | 独立低风险辅助 | 不能再派生子任务，默认保留终端 |
+| DSH（DeepSeek Harness） | 只读调研、确定性验收、小范围机械改动默认路由 | 仅一次机会，含糊或失败转 Codex；机械改动须附 `git status`，工作区脏时转 Codex。禁止再派生；默认关闭终端保留，按需显式传 `--keep-open` |
 | Claude Code | 定点审查或重大裁决 | 每次付费派单需明确授权 |
 | Antigravity（AGY） | 轻量协调与验收 | 受下述配比限制 |
 
@@ -124,6 +124,7 @@ conflux handoff verify --dir handoffs --file handoff.md
 | [`policy.json`](policy.json) | 四类路由及计费和保留终端的示例配置 |
 | [`AGENTS.md`](AGENTS.md) | 共用角色分工与协调者写保护规则 |
 | [`.agents/skills/dispatch/SKILL.md`](.agents/skills/dispatch/SKILL.md) | 派单、查询与交接流程 |
+| [`.agents/skills/autonomy/SKILL.md`](.agents/skills/autonomy/SKILL.md) | 需求确定后的无人值守推进 |
 | [`docs/`](docs/) | CLI 契约、设计决策及发布清单 |
 | [`tests/`](tests/) | 自动化测试和公开发布检查 |
 
