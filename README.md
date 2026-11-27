@@ -72,11 +72,16 @@ conflux usage
 
 派发 Antigravity 前，近 5 小时 Antigravity 成功次数的 2 倍必须小于 Codex 成功次数；检查时还会把这次准备派发的 Antigravity 算进去，即 `2 × (AGY + 1) < Codex`。这是针对滚动限额的内置规则，不用 `antigravity` 路由不受影响；需要其他配比可以提 Issue 或 fork。
 
+## 按需技能
+
+- [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)：负责单次派单、查询 5 小时窗口、依据实际输出和 Orca 终态验收，以及发布和核验 6 行交接。
+- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)：仅在需求确定后无人值守自动推进项目时加载，负责冻结开工契约、四角色静默闭环、返工熔断转 Orca `gate`，以及里程碑 commit 和 6 行 `handoff`；底层派单仍依赖 `conflux-dispatch`。
+
 ## 命令参考
 
 ### `dispatch`
 
-`conflux dispatch` 检查策略后调用 Orca。`--` 前面是 Conflux 参数，后面原样传给 Orca；上面的示例通过 `--environment local` 指定本机，并用 `--json` 提供记入账本所需的 Dispatch ID。策略中的 `"model": "default"` 会让 Orca 使用客户端默认模型。付费路由须在 `--` 之前添加 `--authorize-paid "具体授权理由"`。
+`conflux dispatch` 检查策略后调用 Orca。`--` 前面是 Conflux 参数，后面原样传给 Orca；上面的示例通过 `--environment local` 指定本机，并用 `--json` 提供记入账本所需的 Dispatch ID。所有路由的 `--model` 必填，须匹配策略中的模型；`"model": "default"` 会让 Orca 使用客户端默认模型。付费路由须在 `--` 之前添加 `--authorize-paid "具体授权理由"`。
 
 ### `usage`
 
@@ -110,7 +115,7 @@ conflux handoff verify --dir handoffs --file handoff.md
 | Codex | [AGENTS.md](AGENTS.md) | 以 `-s read-only -a never` 启动，执行者使用独立可写工作区 |
 | Claude Code | [CLAUDE.md](CLAUDE.md) 导入共用规则 | 使用客户端原生工具权限与工作区隔离 |
 | Gemini CLI | [GEMINI.md](GEMINI.md) 导入共用规则 | 保留 Orca hook，追加 [BeforeTool 示例](examples/gemini-before-tool.json) 中的独立拒绝条目，核对脚本路径，并用工作区权限覆盖 shell 等其他写入面 |
-| Antigravity | 提供 [AGENTS.md](AGENTS.md) 与 [派单 Skill](.agents/skills/dispatch/SKILL.md) 的路径 | 能隔离时使用文件权限或只读挂载，写入交给可写执行者 |
+| Antigravity | 提供 [AGENTS.md](AGENTS.md)、[派单 Skill](.agents/skills/dispatch/SKILL.md) 和 [自主推进 Skill](.agents/skills/autonomy/SKILL.md) 的路径 | 能隔离时使用文件权限或只读挂载，写入交给可写执行者 |
 
 ## 仓库文件地图
 
