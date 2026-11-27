@@ -30,10 +30,14 @@ python3 conflux.py dispatch --policy <path> --agent <agent> --profile <profile>
 ## usage
 
 ```text
-python3 conflux.py usage --ledger <path> [--codex-jsonl <path> ...] [--now <iso8601>]
+python3 conflux.py usage --ledger <path> [--codex-jsonl <path> ...] [--agy-brain-dir <path>] [--now <iso8601>]
 ```
 
 - 只读输出一个 JSON 对象，含 `window_hours`、`agy_calls`、`codex_calls`、`other_calls`、`agy_allowed_next` 和 `metric_kind`（`conflux_dispatch_proxy`）。
+- `paid_calls` 统计 `billing == "paid"` 的派单，仅用于观测。 `total_dispatches` 统计全部派单。窗口为 `now - 5h < ts <= now`，按 dispatch ID 去重，重复 ID 取窗口内账本最后一条记录。
+- 指定 `--agy-brain-dir` 后扫描 `<dir>/*/.system_generated/logs/transcript.jsonl`，对 `created_at` 落在同一窗口的 `PLANNER_RESPONSE` 计量，跳过损坏行与非法时间。实时查询跳过 mtime 早于窗口的文件，固定 `--now` 查询读取历史文件。
+- `agy_coordinator` 包含整数 `sessions`（活跃会话数）、`turns`、`input_tokens`、`cache_read_tokens`、`output_tokens`、`total_tokens`（三类 token 之和）和 `max_turn_context_tokens`（各活跃会话时间最新轮的 input + cache read 最大值）。无活跃轮或指定目录不存在时全为 0。
+- 直接调用 Python 入口且省略参数时省略 `agy_coordinator`。Unix 与 Windows 安装入口在无显式参数时尝试 `CONFLUX_AGY_BRAIN_DIR`，未设置或为空时尝试用户目录下的 `.gemini/antigravity-cli/brain`，仅目录存在时自动启用。
 - 提供 Codex 会话 JSONL 时增加 `codex_tokens` 数组。同一路径只统计一次，每项含 `path` 和 `status`，成功时含 `total_tokens`。累计值使用窗口起点或之前的最后一条累计记录作基线，单独出现的 `last_token_usage` 按时间戳和总量去重。文件内最早事件晚于窗口起点时按基线 0 计算。若窗口起点或之前有事件、但没有 token_count 记录，窗口内的 token_count 返回 `missing_baseline`。缺基线或累计量回退时分别返回 `missing_baseline`、`counter_reset`。
 
 ## handoff（切片 3）

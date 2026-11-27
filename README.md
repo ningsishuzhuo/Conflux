@@ -1,9 +1,9 @@
-# Conflux
+# Conflux v0.2.1
 
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Conflux 是给 [Orca](https://github.com/stablyai/orca) 用的派单小工具：按你写的策略检查每次派单是否允许并记录用量，避免超出订阅额度或误用付费模型。核心约 270 行纯 Python 标准库，执行生命周期全交 Orca，不重复造轮子。
+Conflux 是给 [Orca](https://github.com/stablyai/orca) 用的派单小工具：按你写的策略检查每次派单是否允许并记录用量，避免超出订阅额度或误用付费模型。CLI 仅依赖 Python 标准库，执行生命周期全交 Orca，不重复造轮子。
 
 状态：Alpha，接口可能调整。
 
@@ -77,10 +77,10 @@ conflux usage
 - [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)（单次派单、查询与交接）：平时需要单次派单时加载。它按需调用下方 `conflux` CLI 的 `dispatch`、`usage`、`handoff`，检查派单策略、查询最近 5 小时用量、发布和核验 6 行交接。验收时核对 Task ID、Dispatch ID 和真实输出，拒绝把启动时的 `idle` 或旧终态误当成完成。
 - [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`，整个过程分四步：
 
-  1. **开工契约冻结**：这是人参与的唯一重环节。动工前一次确认任务依赖图（DAG）和各任务的 worktree、由协调者持有且执行者不得篡改的验收命令，以及本次 Run 的红线，例如禁止 `git push`、删库和擅改需求。还要确认是否一次性预授权本次 Run 在开工拍砖、大里程碑收口、Codex 连续卡死兜底这三个节点自动调用 Claude。
-  2. **四角色静默推进**：DSH 负责只读调研、只吐结构化事实的确定性验收跑腿和小范围机械改动；只给一次机会，失败或工作区脏时交给 Codex。Codex 负责核心实现与修复，Antigravity 负责轻量协调和验收，Claude 按预授权参与上述节点。
-  3. **自动返工与熔断叫人**：验收不过时附上旧证据打回返工；连续失败超过上限（默认 2～3 次），或遇到需求歧义、未预授权的付费或高危红线、外部故障时，通过 Orca 原生 `gate` 暂停并叫人处理。
-  4. **里程碑防失忆**：每个冻结里程碑收口时，执行者在本地执行 `git commit`，协调者按 `conflux-dispatch` 发布并核验 6 行 `handoff`。
+  1. **预检与契约冻结**：先读派单技能、Orca 编排指南和本地策略，再查 `conflux usage`。冻结前只做预检。确认任务 DAG、worktree、由协调者持有并核对的验收命令及操作红线。
+  2. **分工与审批**：AGY 协调、决策和验收，DSH 做只读调研、确定性验收与小范围机械改动，Codex 负责实现和修复。Claude 默认拒绝，仅高危架构、安全终审或 Codex 熔断兜底经 `gate` 逐次人工审批。批准后内联 DSH 摘要，标明审阅对象，禁业务 shell 与扫仓，仅放行 `worker_done`。
+  3. **派单与止损**：用 `--worktree path:<child-dir>` 指向已有子工作树。轻量 Claude/DSH 在 90 秒检查一次，Codex 在 5 分钟检查一次。收到回执取消检查，遇 409/429 立即停止 worker。Claude 限流时，审查转独立 Codex 交叉审查与 AGY 裁决，常规验收交 DSH + AGY，Codex 熔断救场或不可用时用 `gate` 叫人。
+  4. **验收与交接**：验收后用 `worker-release` 关闭一次性终端，保留工作树。里程碑验收后由执行者本地提交，协调者发布并核验 6 行 handoff，给出绝对路径及可复制的续跑指令。里程碑完成或 `max_turn_context_tokens >= 80000` 时提醒 `/compact` 或新开会话。
 
 需求对齐后，可以直接对主控 AI 说：「按 `conflux-autonomy` 冻结契约并自动推进到底」。
 
@@ -94,7 +94,7 @@ conflux usage
 
 ### `usage`
 
-`conflux usage` 输出最近 5 小时的派单统计。实际订阅配额以服务商显示为准；策略和账本路径可分别通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定。
+`conflux usage` 输出最近 5 小时的去重派单统计，包含付费派单数 `paid_calls` 与派单总数 `total_dispatches`。安装入口探测到 AGY 日志目录时还会输出 `agy_coordinator`，包括活跃会话、轮次、token 用量及最新轮上下文峰值。可用 `--agy-brain-dir` 或 `CONFLUX_AGY_BRAIN_DIR` 指定目录。实际订阅配额以服务商显示为准；策略和账本路径可分别通过 `CONFLUX_POLICY` 和 `CONFLUX_LEDGER` 指定。
 
 ### `handoff`
 

@@ -1,4 +1,5 @@
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import subprocess
@@ -91,9 +92,45 @@ sys.exit(int(sys.argv[8]))
         before = self.ledger.read_bytes()
         self.assertEqual(self.usage(), dict(window_hours=5, codex_calls=2,
                          agy_calls=0, other_calls=0, agy_allowed_next=False,
-                         metric_kind="conflux_dispatch_proxy"))
+                         metric_kind="conflux_dispatch_proxy", paid_calls=0, total_dispatches=2))
         self.assertEqual(self.ledger.read_bytes(), before)
         self.assertFalse((self.root / "ledger.lock").exists())
+
+    def test_paid_calls_count_unique_dispatches_in_window(self):
+        rows = [(EDGE, "edge", "paid"), (NOW, "paid", "paid"),
+                (NOW, "paid", "paid"), (NOW, "free", "low_cost"),
+                ("2026-11-26T10:00:01Z", "future", "paid")]
+        self.ledger.write_text("".join(
+            json.dumps(dict(ts=ts, dispatch_id=key, agent="claude", billing=billing)) + "\n"
+            for ts, key, billing in rows), encoding="utf-8")
+        result = self.usage()
+        self.assertEqual((result["paid_calls"], result["total_dispatches"]), (1, 2))
+
+    def test_agy_coordinator_aggregates_latest_context_in_each_session(self):
+        brain = self.root / "brain"
+        for session, entries in {
+            "one": [(NOW, 10), ("2026-11-26T09:00:00Z", 100), (EDGE, 999),
+                    ("2026-11-26T10:00:01Z", 999), ("invalid", 999)],
+            "two": [(NOW, 20)],
+            "inactive": [(EDGE, 999)],
+        }.items():
+            path = brain / session / ".system_generated/logs/transcript.jsonl"
+            path.parent.mkdir(parents=True)
+            rows = (dict(type="PLANNER_RESPONSE", created_at=stamp, input_tokens=tokens,
+                         cache_read_tokens=2, output_tokens=3) for stamp, tokens in entries)
+            path.write_text("{bad json\nnull\n" + "".join(json.dumps(row) + "\n" for row in rows)
+                            + json.dumps(dict(type="USER_REQUEST", created_at=NOW,
+                                              input_tokens=999)) + "\n", encoding="utf-8")
+            os.utime(path, (1, 1))
+        self.assertEqual(self.usage("--agy-brain-dir", str(brain))["agy_coordinator"],
+                         dict(sessions=2, turns=3, input_tokens=130, cache_read_tokens=6,
+                              output_tokens=9, total_tokens=145, max_turn_context_tokens=22))
+
+    def test_agy_coordinator_missing_directory_reports_zeros(self):
+        self.assertNotIn("agy_coordinator", self.usage())
+        self.assertEqual(self.usage("--agy-brain-dir", str(self.root / "missing"))["agy_coordinator"],
+                         dict(sessions=0, turns=0, input_tokens=0, cache_read_tokens=0,
+                              output_tokens=0, total_tokens=0, max_turn_context_tokens=0))
 
     def test_strict_ratio_and_other_agents(self):
         self.assertEqual(self.dispatch("antigravity", "a").returncode, 2)

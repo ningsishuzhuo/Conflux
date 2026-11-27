@@ -23,7 +23,7 @@ class WrapperTests(unittest.TestCase):
         for path in (self.policy, self.ledger):
             path.parent.mkdir(parents=True)
         self.env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))
-        for name in ("CONFLUX_POLICY", "CONFLUX_LEDGER"):
+        for name in ("CONFLUX_POLICY", "CONFLUX_LEDGER", "CONFLUX_AGY_BRAIN_DIR"):
             self.env.pop(name, None)
 
         if os.name == "nt":
@@ -101,6 +101,34 @@ class WrapperTests(unittest.TestCase):
         result = self.run_cli("usage", f"--ledger={self.ledger}", "--now", NOW)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["codex_calls"], 1)
+
+    def test_usage_detects_agy_brain_and_honors_explicit_options(self):
+        default = Path(self.env["HOME"]) / ".gemini/antigravity-cli/brain"
+        override = self.cwd / "brain override"
+        for brain, tokens in ((default, 12), (override, 34)):
+            path = brain / "session/.system_generated/logs/transcript.jsonl"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(dict(type="PLANNER_RESPONSE", created_at=NOW,
+                                            input_tokens=tokens)) + "\n", encoding="utf-8")
+        for run in (self.run_cli, self.run_windows_wrapper):
+            self.env.pop("CONFLUX_AGY_BRAIN_DIR", None)
+            result = run("usage", "--now", NOW)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["agy_coordinator"]["input_tokens"], 12)
+            self.env["CONFLUX_AGY_BRAIN_DIR"] = str(override)
+            for options, tokens in (((), 34), (("--agy-brain-dir", str(default)), 12),
+                                    ((f"--agy-brain-dir={default}",), 12)):
+                result = run("usage", "--now", NOW, *options)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["agy_coordinator"]["input_tokens"], tokens)
+            self.env["CONFLUX_AGY_BRAIN_DIR"] = str(self.cwd / "missing")
+            result = run("usage", "--now", NOW)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("agy_coordinator", json.loads(result.stdout))
+
+    def run_windows_wrapper(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / "conflux.py"), "--windows-wrapper", *args],
+                              cwd=self.cwd, env=self.env, capture_output=True, text=True)
 
     def test_handoff_preserves_relative_paths(self):
         (self.cwd / "handoff files").mkdir()
