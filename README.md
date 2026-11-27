@@ -1,4 +1,4 @@
-# Conflux v0.2.1
+# Conflux v0.3.0
 
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -68,14 +68,14 @@ conflux usage
 | Codex | 主力执行 | 成功派单计入配比 |
 | DSH（DeepSeek Harness） | 只读调研、确定性验收、小范围机械改动默认路由 | 仅一次机会，含糊或失败转 Codex；机械改动须附 `git status`，工作区脏时转 Codex。禁止再派生；默认关闭终端保留，按需显式传 `--keep-open` |
 | Claude Code | 定点审查或重大裁决 | 本轮明确点名 `Claude`、`Claude Code` 或 `cc` 且意图清晰时，视为本次付费授权，免二次确认 |
-| Antigravity（AGY） | 轻量协调与验收 | 受下述配比限制 |
+| Antigravity（AGY） | 轻量协调与验收 | 只用协调工具。联网检索、扫仓、读取两个及以上业务文件或运行业务命令，首步交 DSH。受下述配比限制 |
 
 派发 Antigravity 前，近 5 小时 Antigravity 成功次数的 2 倍必须小于 Codex 成功次数；检查时还会把这次准备派发的 Antigravity 算进去，即 `2 × (AGY + 1) < Codex`。这是针对滚动限额的内置规则，不用 `antigravity` 路由不受影响；需要其他配比可以提 Issue 或 fork。
 
 ## 两个按需技能
 
 - [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)（单次派单、查询与交接）：平时需要单次派单时加载。它按需调用下方 `conflux` CLI 的 `dispatch`、`usage`、`handoff`，检查派单策略、查询最近 5 小时用量、发布和核验 6 行交接。验收时核对 Task ID、Dispatch ID 和真实输出，拒绝把启动时的 `idle` 或旧终态误当成完成。
-- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`。方案打磨期只做授权的只读调研或评审。用户明确开工后冻结任务 DAG、工作区、验收标准、安全红线和 Claude 授权策略。派单后由 Orca 原生消息唤醒，禁止定时看门狗和阻塞轮询。实施、验收和异常处理前，按技能中的强动作门加载对应冷层。
+- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`。方案打磨期只做授权的只读调研或评审，适用于代码开发、文案与 PPT、科研协作。用户明确开工后冻结任务 DAG、工作区、验收标准、安全红线和 Claude 授权策略。派单后由 Orca 原生消息唤醒，禁止定时看门狗和阻塞轮询。两个 Skill 的热入口各由单测限制在 28 行以内，按动作加载冷层。实施者先自检，协调者按实测证据验收。硬伤按稳定失败指纹打回，失败集合严格缩小且无新增失败才继续换人复修。软伤只清理一次，按原标准复验，失败时确认无并发修改后回退本次清理。
 
 需求对齐后，可以直接对主控 AI 说：「按 `conflux-autonomy` 冻结契约并自动推进到底」。
 
@@ -113,6 +113,8 @@ conflux handoff verify --dir handoffs --file handoff.md
 常见退出码：`0` 成功，`2` 策略拒绝或输入无效，`10` 交接内容重复，`11` 交接内容冲突；完整说明见 [CLI 契约](docs/cli-contract.md)。
 
 ## 跨客户端接入
+
+写保护分三档：只读权限或挂载提供硬隔离，工具拦截提供辅助检测，只有行为约定时按软约束处理。
 
 | 客户端 | 规则入口 | 协调会话写保护 |
 | --- | --- | --- |
