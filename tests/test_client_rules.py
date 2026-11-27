@@ -29,7 +29,7 @@ class ClientRulesTests(unittest.TestCase):
         header = re.match(r"\A---\n(.*?)\n---\n", content, re.S)
         self.assertIsNotNone(header)
         self.assertRegex(header[1], r"(?m)^name: conflux-dispatch$")
-        self.assertRegex(header[1], r'(?m)^description: "Use when [^"\n]+"$')
+        self.assertRegex(header[1], r'(?m)^description: "派发 Orca worker、[^"\n]+按需加载。"$')
 
     def test_autonomy_skill_entry_and_contract(self):
         path = ".agents/skills/autonomy/SKILL.md"

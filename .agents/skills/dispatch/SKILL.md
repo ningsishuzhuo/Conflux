@@ -1,6 +1,6 @@
 ---
 name: conflux-dispatch
-description: "Use when dispatching Orca workers, checking the five-hour dispatch window, or publishing and verifying a Conflux handoff."
+description: "派发 Orca worker、查询五小时派单窗口，或发布与核验 Conflux 交接文件时按需加载。"
 ---
 
 只在准备派单、查询五小时窗口或交接时加载。按当前 Run 和策略填写参数。
@@ -14,7 +14,10 @@ conflux dispatch --agent codex --profile default \
 conflux dispatch --agent dsh --profile default --model default --cwd . -- \
   --from "$ORCA_SESSION" --spec "执行只读调研、确定性验收或小范围机械改动（禁止再派生）" \
   --worktree current --environment local --json
-conflux dispatch --agent claude --profile default --model default --cwd . --authorize-paid "<授权理由>" -- --from "$ORCA_SESSION" --spec "执行授权终审" --worktree current --environment local --json
+conflux dispatch --agent claude --profile default --model default --cwd . \
+  --authorize-paid "<授权理由>" -- \
+  --from "$ORCA_SESSION" --spec "执行授权终审" \
+  --worktree current --environment local --json
 conflux usage
 conflux handoff publish --dir "$HANDOFF_DIR" --file handoff.md
 conflux handoff verify --dir "$HANDOFF_DIR" --file handoff.md

@@ -29,4 +29,4 @@ description: "仅在需求确定后无人值守自动推进项目时按需加载
 
 ## 里程碑防失忆
 
-每个阶段验收通过后，由执行者做本地 `git commit`；协调者用 Conflux 6 行 `handoff publish/verify` 落盘索引，不维护第二份实时状态。
+每个冻结里程碑验收通过后，必须由执行者完成本地 `git commit`，并由协调者按 `conflux-dispatch` 执行 6 行 `handoff publish/verify`；不维护第二份实时状态。
