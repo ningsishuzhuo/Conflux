@@ -72,12 +72,21 @@ conflux usage
 
 派发 Antigravity 前，近 5 小时 Antigravity 成功次数的 2 倍必须小于 Codex 成功次数；检查时还会把这次准备派发的 Antigravity 算进去，即 `2 × (AGY + 1) < Codex`。这是针对滚动限额的内置规则，不用 `antigravity` 路由不受影响；需要其他配比可以提 Issue 或 fork。
 
-## 按需技能
+## 两个按需技能
 
-- [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)：负责单次派单、查询 5 小时窗口、依据实际输出和 Orca 终态验收，以及发布和核验 6 行交接。
-- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)：仅在需求确定后无人值守自动推进项目时加载，负责冻结开工契约、四角色静默闭环、返工熔断转 Orca `gate`，以及里程碑 commit 和 6 行 `handoff`；底层派单仍依赖 `conflux-dispatch`。
+- [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md)（单次派单、查询与交接）：平时需要单次派单时加载。它按需调用下方 `conflux` CLI 的 `dispatch`、`usage`、`handoff`，检查派单策略、查询最近 5 小时用量、发布和核验 6 行交接。验收时核对 Task ID、Dispatch ID 和真实输出，拒绝把启动时的 `idle` 或旧终态误当成完成。
+- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md)（无人值守自主推进）：需求确定后，想让主控 AI 自动把整个项目跑完时加载。每次派单仍通过 `conflux-dispatch`，整个过程分四步：
 
-## 命令参考
+  1. **开工契约冻结**：这是人参与的唯一重环节。动工前一次确认任务依赖图（DAG）和各任务的 worktree、由协调者持有且执行者不得篡改的验收命令，以及本次 Run 的红线，例如禁止 `git push`、删库和擅改需求。还要确认是否一次性预授权本次 Run 在开工拍砖、大里程碑收口、Codex 连续卡死兜底这三个节点自动调用 Claude。
+  2. **四角色静默推进**：DSH 负责只读调研、只吐结构化事实的确定性验收跑腿和小范围机械改动；只给一次机会，失败或工作区脏时交给 Codex。Codex 负责核心实现与修复，Antigravity 负责轻量协调和验收，Claude 按预授权参与上述节点。
+  3. **自动返工与熔断叫人**：验收不过时附上旧证据打回返工；连续失败超过上限（默认 2～3 次），或遇到需求歧义、未预授权的付费或高危红线、外部故障时，通过 Orca 原生 `gate` 暂停并叫人处理。
+  4. **里程碑防失忆**：每个冻结里程碑收口时，执行者在本地执行 `git commit`，协调者按 `conflux-dispatch` 发布并核验 6 行 `handoff`。
+
+需求对齐后，可以直接对主控 AI 说：「按 `conflux-autonomy` 冻结契约并自动推进到底」。
+
+## CLI 命令参考
+
+`dispatch`、`usage`、`handoff` 是 `conflux` 命令行工具的三个子命令，不是独立技能；平时由 `conflux-dispatch` 技能按需调用，也可以手动执行。
 
 ### `dispatch`
 
