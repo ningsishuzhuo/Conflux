@@ -9,6 +9,7 @@ import sys
 
 
 from conflux_handoff import exclusive_lock, handoff
+from conflux_spend import codex_tokens, claude_spend
 
 
 DATA_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
@@ -100,58 +101,27 @@ def append_receipt(path, output, now, route):
             ledger.write(prefix + (json.dumps(row) + "\n").encode("utf-8"))
 
 
-def codex_tokens(path, now):
-    start = now - timedelta(hours=5)
-    tokens, seen = 0, set()
-    evidence = dict(path=str(path))
-    with path.open(encoding="utf-8") as source:
-        rows = (json.loads(line) for line in source if line.strip())
-        events = sorted(((utc(row["timestamp"]), row.get("payload", row))
-                         for row in rows), key=lambda item: item[0])
-    has_baseline = bool(events and events[0][0] > start)
-    previous = 0 if has_baseline else None
-    for stamp, event in events:
-        if event.get("type") != "token_count":
-            continue
-        if stamp > now:
-            continue
-        info = event.get("info")
-        info = event if info is None else info
-        total, delta = (({} if usage is None else usage).get("total_tokens")
-                         for usage in map(info.get, ("total_token_usage", "last_token_usage")))
-        if stamp <= start:
-            has_baseline = True
-            if total is not None:
-                previous = total
-            continue
-        if not has_baseline or (total is not None and previous is None):
-            return dict(evidence, status="missing_baseline")
-        if total is not None:
-            if total < previous:
-                return dict(evidence, status="counter_reset")
-            tokens += total - previous
-            previous = total
-        elif delta is not None and (stamp, delta) not in seen:
-            tokens += delta
-            seen.add((stamp, delta))
-            if previous is not None:
-                previous += delta
-    return dict(evidence, status="ok", total_tokens=tokens)
-
-
 def user_path(variable, suffix):
     return Path(os.environ.get(variable) or Path(os.environ["USERPROFILE"]) / suffix)
 
 
-def usage(argv, ledger=None):
+def spend_options(parser, default=None):
+    parser.add_argument("--spend-config", type=Path, default=default)
+    parser.add_argument("--claude-projects", type=Path, default=Path.home() / ".claude/projects")
+
+
+def usage(argv, ledger=None, spend_default=None):
     parser = argparse.ArgumentParser(prog="conflux.py usage", allow_abbrev=False)
     parser.add_argument("--ledger", required=ledger is None, default=ledger, type=Path)
     parser.add_argument("--codex-jsonl", action="append", type=Path, default=[])
     parser.add_argument("--now")
+    spend_options(parser, spend_default)
     args = parser.parse_args(argv)
     try:
         now = utc(args.now)
         result = window(args.ledger, now)
+        if args.spend_config:
+            result["claude_spend"] = claude_spend(args.claude_projects, args.spend_config, now)
         if args.codex_jsonl:
             paths = dict.fromkeys(path.resolve() for path in args.codex_jsonl)
             result["codex_tokens"] = [codex_tokens(path, now) for path in paths]
@@ -165,8 +135,10 @@ def main(argv):
     if windows_wrapper := argv[:1] == ["--windows-wrapper"]:
         argv = argv[1:]
     ledger = user_path("CONFLUX_LEDGER", ".local/state/conflux/ledger.jsonl") if windows_wrapper and argv[:1] in (["usage"], ["dispatch"]) else None
+    spend_default = user_path("CONFLUX_SPEND", ".config/conflux/spend.json") if windows_wrapper else None
+    spend_default = spend_default if spend_default and spend_default.exists() else None
     if argv[:1] in (["usage"], ["handoff"]):
-        return usage(argv[1:], ledger) if argv[0] == "usage" else handoff(argv[1:])
+        return usage(argv[1:], ledger, spend_default) if argv[0] == "usage" else handoff(argv[1:])
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("command", choices=("dispatch",))
     parser.add_argument("--policy", required=not (windows_wrapper and argv[:1] == ["dispatch"]), type=Path)
@@ -177,6 +149,7 @@ def main(argv):
     parser.add_argument("--orca-bin", default="orca")
     parser.add_argument("--ledger", type=Path, default=ledger)
     parser.add_argument("--now")
+    spend_options(parser, spend_default)
 
     separator = argv.index("--") if "--" in argv else len(argv)
     args = parser.parse_args(argv[:separator])
@@ -191,6 +164,15 @@ def main(argv):
         parser.error("unknown policy route")
     if route["billing"] == "paid" and not args.authorize_paid.strip():
         parser.error("paid route requires --authorize-paid with a nonblank reason")
+    if route["billing"] == "paid" and args.spend_config:
+        try:
+            spend = claude_spend(args.claude_projects, args.spend_config, utc(args.now))
+            if spend["status"] != "ok" or any(w["exceeded"] for w in spend["windows"].values()):
+                parser.error(f"Claude spend guard: {spend}")
+            if spend["fallback_models"]:
+                print(f"warning: fallback pricing: {spend['fallback_models']}", file=sys.stderr)
+        except DATA_ERRORS as error:
+            parser.error(f"cannot read Claude spend: {error}")
     if not args.cwd.is_dir():
         parser.error("--cwd must be an existing directory")
     for token in (native := argv[separator + 1:]):
