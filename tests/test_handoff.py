@@ -110,7 +110,7 @@ class HandoffTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 2)
                     self.assertIn(reason, result.stderr)
-                    self.assertIn(HANDOFF_TEMPLATE, result.stderr)
+                    self.assertIn(HANDOFF_TEMPLATE, result.stderr.replace(b"\r\n", b"\n"))
         self.assertEqual(list(self.directory.iterdir()), [])
 
     def test_help_describes_format(self):
@@ -122,4 +122,4 @@ class HandoffTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0)
                 self.assertIn(b"ending in LF", result.stdout)
-                self.assertIn(HANDOFF_TEMPLATE, result.stdout)
+                self.assertIn(HANDOFF_TEMPLATE, result.stdout.replace(b"\r\n", b"\n"))

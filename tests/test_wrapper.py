@@ -29,6 +29,10 @@ class WrapperTests(unittest.TestCase):
         if os.name == "nt":
             self.entry = ROOT / "bin/conflux.cmd"
         else:
+            shim_dir = self.cwd / "python-bin"
+            shim_dir.mkdir()
+            (shim_dir / "python3").symlink_to(sys.executable)
+            self.env["PATH"] = os.pathsep.join([str(shim_dir), *os.get_exec_path(self.env)])
             self.entry = self.cwd / "conflux"
             (self.cwd / "relative-link").symlink_to(ROOT / "bin/conflux")
             self.entry.symlink_to("relative-link")
