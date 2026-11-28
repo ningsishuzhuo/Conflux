@@ -6,7 +6,7 @@ description: "按契约推进代码、文案、PPT 或科研协作时按需加�
 # 自主推进
 
 0. 预检：读 `conflux-dispatch`、`orca skills get orchestration`、`~/.config/conflux/policy.json`，运行 `conflux usage`。
-1. 用户明示冻结完整四项契约（且无悬空外写项）前零状态改动，含 `git fetch/pull/switch`。未冻结时仅说“按你的下一步来做”或触发本 Skill，仍先出草案，禁催冻结。四项为任务 DAG（含依赖与工作区）、协调者持有的验收标准、执行安全红线、按 AGENTS.md 执行 Claude 点名免二次确认策略。代码、文案、PPT、科研的冻结契约均须显式写明“独立语义审查：安排（由谁）/ 不安排（原因）”。
+1. 用户明示冻结完整四项契约（且无悬空外写项）前零状态改动，含 `git fetch/pull/switch`。未冻结时仅说“按你的下一步来做”或触发本 Skill，仍先出草案。需求模糊时先列选项引导拆解，冻结前收口问题清单与最终方案。禁催冻结。四项为任务 DAG（含依赖与工作区）、协调者持有的验收标准、执行安全红线、按 AGENTS.md 执行 Claude 点名免二次确认策略。代码、文案、PPT、科研的冻结契约均须显式写明“独立语义审查：安排（由谁）/ 不安排（原因）”。
 2. 强动作门以本 Skill 实际加载目录为基准，读取同级 references：
    - 派发实施或验收单前，必读 `references/review-checklists.md` 对应场景段和通用段。
    - 遇 409/429/502 重试、Claude gate、打回收口细则、handoff/release 异常、外部工具未覆盖报错或外部写未决项时，必读 `references/edge-cases.md` 对应段。

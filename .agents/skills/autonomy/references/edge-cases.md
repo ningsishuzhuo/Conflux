@@ -2,7 +2,7 @@
 
 ## API 重试止损
 
-Claude 审查出现 `modelWait: retrying`（含 409/429/502/其他 5xx）立即 `worker-stop`，切全新独立上下文 Codex。若本轮 Claude 用于 Codex 熔断救场，或替补不可用，停止并 `gate-create` 叫人。
+Claude 审查或点名咨询出现 `modelWait: retrying`（含 409/429/502/其他 5xx）立即 `worker-stop`。若本轮 Claude 用于 Codex 熔断救场，或替补不可用，停止并 `gate-create` 叫人。其余情况直接切全新独立上下文 Codex（免再追问），并在 `worker_done`/交付首行标注 `已自动降级为 Codex（原因：API 重试止损）`。
 
 ## Claude gate 与内联审查
 

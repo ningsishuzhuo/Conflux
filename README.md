@@ -3,7 +3,7 @@
 [![Tests](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml/badge.svg)](https://github.com/ningsishuzhuo/Conflux/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**状态：Alpha，当前版本 v0.3.1，接口可能调整。**
+**状态：Alpha，当前版本 v0.3.2，接口可能调整。**
 
 Conflux 是一个采用 MIT 许可的开源协作工具，由仅依赖 Python 标准库的轻量命令行工具（CLI）、共用协作规则和按需加载的技能组成。协调者可以用它控制 Antigravity（AGY）在五小时滚动窗口内的派单量，防止误用付费模型，并把已验收的任务交给新会话继续推进。Conflux 检查派单、记录成功回执和核验交接文件，任务执行与会话生命周期由 [Orca](https://github.com/stablyai/orca) 负责。
 
@@ -223,5 +223,6 @@ python3 -m unittest discover -s tests -v
 - **v0.1.0** 发布 Alpha，提供派单准入、五小时窗口和交接命令。
 - **v0.2.0** 加入默认 DSH 路由和按需自主推进技能。**v0.2.1** 收紧派单与自主推进规则，并加入五小时 AGY 协调会话 token 统计。
 - **v0.3.0** 精简共用协作规则，按动作加载验收与异常处理说明。**v0.3.1** 收紧执行边界与会话交接流程。
+- **v0.3.2** 从用户视角重写 README，修复 Windows 和不同 Python 版本下的单测问题，精简升级技能入口以及审查和止损规则。
 
 项目采用 [MIT License](LICENSE)。
