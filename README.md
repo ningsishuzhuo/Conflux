@@ -15,14 +15,6 @@ Conflux 是一个采用 MIT 许可的开源协作工具，由仅依赖 Python �
 - **按阶段分工**。协调者先和用户对齐方案，再把调研、实施和验收分给不同角色。所有执行者直接向协调者回报，避免多层派单。
 - **跨会话续跑**。用统一格式记录 Orca 标识和下一步。接手会话读回交接单，核对 Orca 状态后继续。
 
-## 端到端工作流
-
-1. **安装并配置路由**。确认命令可用，检查本机策略中的代理、配置标签和模型是否对应预期。
-2. **在打磨期对齐方案**。先明确目标、依赖、工作区和验收方式。需要查证时由协调者派只读调研，结合证据形成草案。
-3. **冻结契约后派单**。用户明确确认完整契约后，协调者用 `conflux dispatch` 启动执行者，再按回执和实测证据验收。
-4. **观察最近五小时的用量**。用 `conflux usage` 查看派单量、下一次 AGY 派单是否允许，以及可用的会话用量数据。
-5. **发布并核验交接单**。里程碑通过后，用 `conflux handoff` 发布并读回交接单。新会话核对其中的 Run、Task 和 Dispatch，随后按 `Next` 续跑。
-
 ## 安装与配置
 
 macOS、Linux 和 Windows Subsystem for Linux（WSL）需要 Python 3.10 或更新版本，以及已加入 `PATH` 的 Orca CLI。
@@ -80,7 +72,55 @@ conflux usage
 
 </details>
 
-## 核心命令速览
+## 日常怎么用
+
+### 两个按需技能
+
+技能为协调者 AI 提供工作流程和命令规范。CLI 执行准入硬校验、成功回执记账和交接核验，日常由 AI 自动调用。
+
+- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md) 是日常主入口。在对话中触发 `/conflux-autonomy`，或直接用自然语言提出代码、文案、演示文稿或科研需求。协调者 AI 依次推进预检、打磨、冻结、实施与审写分离验收，最后办理交接。
+- [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md) 用于单次派单、查用量和交接。例如，把一项已冻结的测试任务派给 Codex，再核对 Orca 回执。
+
+技能入口位于 `.agents/skills/`，只在相应任务触发时加载。协调者按当前动作加载自主推进技能同级 `references/` 冷层中的场景化验收与异常处理说明。实施或验收派单前读 [审查清单](.agents/skills/autonomy/references/review-checklists.md)，涉及授权门、已覆盖的重试或交接异常时读 [边界情况](.agents/skills/autonomy/references/edge-cases.md)。所需段落无法读取时，停在相关动作并报告。
+
+### 端到端工作流
+
+1. **在对话中提需求**。触发 `/conflux-autonomy`，由协调者检查本机路由、依赖和工作区。
+2. **在打磨期对齐方案**。和协调者明确目标、任务依赖、工作区和验收方式。需要查证时，由协调者派只读调研，再结合证据形成草案。
+3. **确认完整契约后执行**。你明确拍板后，协调者安排执行者，按契约指定的审查安排及实测证据验收。
+4. **随时查看用量**。手动运行 `conflux usage`，查看最近五小时的派单量、下一次 AGY 派单是否允许，以及可用的会话用量数据。
+5. **在新会话续跑**。里程碑验收后，协调者发布并读回交接单。新会话核对 Orca 中的 Run、Task 和 Dispatch，再按 `Next` 继续。
+
+### 协作模型
+
+| 角色 | 职责与约束 |
+| --- | --- |
+| AGY（Antigravity） | 负责定契约、做决策和验收。联网检索、扫仓、读至少两个业务文件或运行业务命令时，首步交给 DeepSeek Harness（DSH）。拟派 AGY 前，当前窗口的计数须满足 `2 × (AGY + 1) < Codex`。 |
+| DSH（DeepSeek Harness） | 做只读调研和客观验收。冻结后也可在干净工作区做小范围机械改动，并附 `git status`。只给一次机会，证据不足或失败即转 Codex。 |
+| Codex | 承担主要实施，包括语义设计、多文件改造、文案、演示文稿和科研。 |
+| Claude | 用于定点审查或重大裁决，默认拒绝。本轮明确点名 Claude、Claude Code 或 cc 且意图清晰时免二次确认，仍通过 `--authorize-paid` 记账。协调者主动提议或意图模糊时走 Orca 确认门。 |
+
+#### 打磨与冻结
+
+打磨期先出草案，协调者保持零状态改动，包括禁止改文件和执行 `git fetch`、`git pull`、`git switch`。用户明确拍板前，只派 DSH 做只读调研，或由用户点名做只读评审。触发自主推进技能或说「按你的下一步来做」仍属于打磨期。
+
+冻结需要四项齐备：含依赖关系和工作区的任务图、由协调者持有的验收标准、执行安全红线、按共用规则执行的 Claude 点名授权策略。契约还须明确是否安排独立语义审查，安排时写明审查人，省略时记录原因。
+
+草案应为 `git push`、拉取请求（PR）、Issue（包括 `Refs` 和 `Closes`）及发版等外部写操作写明唯一默认值和执行者。所有未决项须在冻结前拍板，外部写默认值须经明确确认。已冻结的默认值仅在参数或目标变化时重批。冻结后，执行者按授权范围交付，协调者依据约定证据验收。派单采用单层结构，执行者禁止继续派生执行者。
+
+#### 写保护与客户端入口
+
+| 档位 | 做法 |
+| --- | --- |
+| 硬隔离 | Codex 协调端用 `-s read-only -a never`，也可用只读工作区或只读挂载。执行者使用独立可写工作区。 |
+| 辅助检测 | Gemini CLI 保留 Orca hook，追加 `BeforeTool` 写工具拦截。间接写入依靠工作区权限兜底。 |
+| 软约束 | Antigravity、SSH 和 WSL 协调端遵守会话规则，能隔离时优先用硬隔离。 |
+
+Codex 使用共用规则并从 `.agents/skills/` 发现技能。Claude Code 和 Gemini CLI 分别通过各自的入口文件引用共用规则，再按路径读取技能。Antigravity 由派单显式提供规则或技能路径。入口参见 [AGENTS.md](AGENTS.md)、[CLAUDE.md](CLAUDE.md)、[GEMINI.md](GEMINI.md)。
+
+## CLI 命令参考
+
+日常派单与交接主要由 AI 自动调用 CLI。你可以随时运行 `conflux usage`，通常只在排查报错、验证策略或手工补做交接时查阅本节。
 
 ### `conflux dispatch` · 检查并派单
 
@@ -142,40 +182,6 @@ conflux handoff verify --dir handoffs --file handoff.md
 | `verify` | `0` 内容匹配，`11` 内容冲突，`2` 输入无效或缺少所需文件、目录。 |
 
 `conflux --help` 的顶层列表只显示 `dispatch`，因为入口单独分流 `usage` 和 `handoff`。完整帮助请分别运行 `conflux dispatch --help`、`conflux usage --help` 和 `conflux handoff --help`。参数和错误处理见 [CLI 契约](docs/cli-contract.md)。
-
-## 协作模型
-
-| 角色 | 职责与约束 |
-| --- | --- |
-| AGY（Antigravity） | 负责定契约、做决策和验收。联网检索、扫仓、读至少两个业务文件或运行业务命令时，首步交 DSH。拟派 AGY 前，当前窗口的计数须满足 `2 × (AGY + 1) < Codex`。 |
-| DSH（DeepSeek Harness） | 做只读调研和客观验收。冻结后也可在干净工作区做小范围机械改动，并附 `git status`。只给一次机会，证据不足或失败即转 Codex。 |
-| Codex | 承担主要实施，包括语义设计、多文件改造、文案、演示文稿和科研。 |
-| Claude | 用于定点审查或重大裁决，默认拒绝。本轮明确点名且意图清晰时免二次确认，仍通过 `--authorize-paid` 记账。协调者主动提议或意图模糊时走 Orca 确认门。 |
-
-### 打磨与冻结
-
-打磨期先出草案，协调者保持零状态改动，包括禁止改文件和执行 `git fetch`、`git pull`、`git switch`。用户明确拍板前，只派 DSH 做只读调研，或由用户点名做只读评审。触发自主推进技能或说「按你的下一步来做」仍属于打磨期。
-
-冻结需要四项齐备：含依赖关系和工作区的任务图、由协调者持有的验收标准、执行安全红线、按共用规则执行的 Claude 点名授权策略。契约还须明确是否安排独立语义审查，安排时写明审查人，省略时记录原因。
-
-草案应为 `git push`、拉取请求（PR）、Issue（包括 `Refs` 和 `Closes`）及发版等外部写操作写明唯一默认值和执行者。所有未决项须在冻结前拍板，外部写默认值须经明确确认。已冻结的默认值仅在参数或目标变化时重批。冻结后，执行者按授权范围交付，协调者依据约定证据验收。派单采用单层结构，执行者禁止继续派生执行者。
-
-### 写保护与客户端入口
-
-| 档位 | 做法 |
-| --- | --- |
-| 硬隔离 | Codex 协调端用 `-s read-only -a never`，也可用只读工作区或只读挂载。执行者使用独立可写工作区。 |
-| 辅助检测 | Gemini CLI 保留 Orca hook，追加 `BeforeTool` 写工具拦截。间接写入依靠工作区权限兜底。 |
-| 软约束 | Antigravity、SSH 和 WSL 协调端遵守会话规则，能隔离时优先用硬隔离。 |
-
-Codex 使用共用规则并从 `.agents/skills/` 发现技能。Claude Code 和 Gemini CLI 分别通过各自的入口文件引用共用规则，再按路径读取技能。Antigravity 由派单显式提供规则或技能路径。入口参见 [AGENTS.md](AGENTS.md)、[CLAUDE.md](CLAUDE.md)、[GEMINI.md](GEMINI.md)。
-
-## 两个按需技能
-
-- [`conflux-dispatch`](.agents/skills/dispatch/SKILL.md) 用于单次派单、查用量和交接。例如，协调者可以用它给 Codex 派一项已冻结的测试任务，再查 Orca 回执。
-- [`conflux-autonomy`](.agents/skills/autonomy/SKILL.md) 用于持续推进代码、文案、演示文稿和科研任务，从预检、打磨到冻结、验收及交接。
-
-技能热层放在 `.agents/skills/`，只在相应任务触发时加载。自主推进技能把场景化验收和异常处理放在同级 `references/` 冷层。实施或验收派单前读 [审查清单](.agents/skills/autonomy/references/review-checklists.md)，涉及授权门、已覆盖的重试或交接异常时读 [边界情况](.agents/skills/autonomy/references/edge-cases.md)。所需段落无法读取时，停在相关动作并报告。
 
 ## 术语速查
 
